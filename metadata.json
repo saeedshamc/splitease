@@ -1,0 +1,6 @@
+{
+  "name": "SplitEase",
+  "description": "A shared expense management app for families, roommates, or friend groups with smart balance calculation, recurring bills, reports, and full English/Persian localization.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
