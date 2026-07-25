@@ -44,7 +44,8 @@ data class Expense(
     val splitType: String, // "EQUAL", "PERCENTAGE", "CUSTOM", "BY_HEADCOUNT"
     val timestamp: Long = System.currentTimeMillis(),
     val isRecurring: Boolean = false,
-    val dueDate: Long = 0L // Next reminder timestamp if recurring
+    val dueDate: Long = 0L, // Next reminder timestamp if recurring
+    val actualPayerName: String? = null // For Multi-Group trips: specific member inside the participating family/group who paid
 )
 
 @Entity(tableName = "expense_splits")

@@ -22,10 +22,16 @@ class SplitEaseViewModel(application: Application) : AndroidViewModel(applicatio
     private val sharedPrefs = application.getSharedPreferences("SplitEasePrefs", Context.MODE_PRIVATE)
     
     // Database and Repository Setup
+    private val MIGRATION_3_4 = object : androidx.room.migration.Migration(3, 4) {
+        override fun migrate(database: androidx.sqlite.db.SupportSQLiteDatabase) {
+            database.execSQL("ALTER TABLE expenses ADD COLUMN actualPayerName TEXT DEFAULT NULL")
+        }
+    }
+
     private val db = androidx.room.Room.databaseBuilder(
         application,
         AppDatabase::class.java, "splitease_db"
-    ).fallbackToDestructiveMigration().build()
+    ).addMigrations(MIGRATION_3_4).fallbackToDestructiveMigration().build()
     
     val repository = ExpenseRepository(db)
     
@@ -320,7 +326,7 @@ class SplitEaseViewModel(application: Application) : AndroidViewModel(applicatio
                     val grpMembers = allMems.filter { it.groupId == grpId }
                     val totalHc = grpMembers.sumOf { it.headcount.coerceAtLeast(1) }.coerceAtLeast(1)
                     val masterPayer = grpMembers.firstOrNull()?.name
-                    val dispName = if (masterPayer != null) "${grp.name} (👑 $masterPayer)" else grp.name
+                    val dispName = if (masterPayer != null && grp.groupType == "FAMILY_TRIP") "${grp.name} (👑 $masterPayer)" else grp.name
                     repository.insertMember(
                         groupId = tripId,
                         name = dispName,
@@ -368,7 +374,8 @@ class SplitEaseViewModel(application: Application) : AndroidViewModel(applicatio
         payerId: Int,
         splitType: String,
         customShares: Map<Int, Double>, // Member ID -> share amount/percentage
-        isRecurring: Boolean
+        isRecurring: Boolean,
+        actualPayerName: String? = null
     ) {
         val gId = _selectedGroupId.value
         if (gId == -1) return
@@ -392,7 +399,8 @@ class SplitEaseViewModel(application: Application) : AndroidViewModel(applicatio
                 splitType = splitType,
                 timestamp = System.currentTimeMillis(),
                 isRecurring = isRecurring,
-                dueDate = nextDueDate
+                dueDate = nextDueDate,
+                actualPayerName = actualPayerName
             )
 
             when (splitType) {
@@ -438,7 +446,8 @@ class SplitEaseViewModel(application: Application) : AndroidViewModel(applicatio
         splitType: String,
         customShares: Map<Int, Double>,
         isRecurring: Boolean,
-        timestamp: Long
+        timestamp: Long,
+        actualPayerName: String? = null
     ) {
         val gId = _selectedGroupId.value
         if (gId == -1) return
@@ -463,7 +472,8 @@ class SplitEaseViewModel(application: Application) : AndroidViewModel(applicatio
                 splitType = splitType,
                 timestamp = timestamp,
                 isRecurring = isRecurring,
-                dueDate = nextDueDate
+                dueDate = nextDueDate,
+                actualPayerName = actualPayerName
             )
 
             when (splitType) {

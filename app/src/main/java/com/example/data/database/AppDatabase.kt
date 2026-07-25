@@ -133,7 +133,7 @@ interface RecurringScheduleDao {
 
 @Database(
     entities = [Group::class, Member::class, Expense::class, ExpenseSplit::class, Settlement::class, User::class, RecurringSchedule::class],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

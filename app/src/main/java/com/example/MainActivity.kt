@@ -486,6 +486,46 @@ fun DashboardScreen(
                                                 color = if (netBalance > 0) Color(0xFF10B981) else if (netBalance < -1.0) Color(0xFFEF4444) else MaterialTheme.colorScheme.onSurfaceVariant
                                             )
                                         }
+
+                                        val innerMems = remember(allMembersList, grpId) { if (grpId != null) allMembersList.filter { it.groupId == grpId } else emptyList() }
+                                        if (innerMems.isNotEmpty()) {
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)))
+                                            Text(
+                                                text = if (isFarsi) "👥 مرحله دوم: تفکیک هزینه نفرات در این گروه:" else "👥 Stage 2: Per-Person Breakdown in Group:",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                            innerMems.forEachIndexed { idx, ind ->
+                                                val indShare = costPerPerson * ind.headcount.coerceAtLeast(1)
+                                                val indPaid = expenses.filter { it.payerId == m.id && (it.actualPayerName == ind.name || (it.actualPayerName == null && idx == 0)) }.sumOf { it.amount }
+                                                val indNet = indPaid - indShare
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth().padding(start = 4.dp),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(
+                                                        text = "• ${ind.name} (${ind.headcount} ${if (isFarsi) "نفر" else "p"})" + if (idx == 0) " (👑)" else "",
+                                                        fontSize = 11.sp,
+                                                        fontWeight = FontWeight.SemiBold
+                                                    )
+                                                    val indBalTxt = if (kotlin.math.abs(indNet) < 1.0) {
+                                                        if (isFarsi) "تسویه" else "Settled"
+                                                    } else if (indNet > 0) {
+                                                        (if (isFarsi) "طالب: +" else "+") + Localization.formatCurrency(indNet, isFarsi, customCurrency)
+                                                    } else {
+                                                        (if (isFarsi) "بدهی: -" else "-") + Localization.formatCurrency(kotlin.math.abs(indNet), isFarsi, customCurrency)
+                                                    }
+                                                    Text(
+                                                        text = "${if (isFarsi) "سهم:" else "Share:"} ${Localization.formatCurrency(indShare, isFarsi, customCurrency)} | $indBalTxt",
+                                                        fontSize = 11.sp,
+                                                        color = if (indNet > 0) Color(0xFF10B981) else if (indNet < -1.0) Color(0xFFEF4444) else MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -1074,8 +1114,13 @@ fun ExpenseItemCard(
                             fontSize = 14.sp
                         )
                         Spacer(modifier = Modifier.height(2.dp))
+                        val payerDisplay = if (!expense.actualPayerName.isNullOrBlank() && expense.actualPayerName != payer?.name) {
+                            "${expense.actualPayerName} (${payer?.name ?: ""})"
+                        } else {
+                            payer?.name ?: ""
+                        }
                         Text(
-                            text = (payer?.name ?: "") + " • " + Localization.getString("category_${expense.category.lowercase()}", isFarsi),
+                            text = "$payerDisplay • " + Localization.getString("category_${expense.category.lowercase()}", isFarsi),
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                         )
@@ -1251,11 +1296,13 @@ fun AddExpenseScreen(
     val groups by viewModel.groups.collectAsStateWithLifecycle()
     val selectedGroupId by viewModel.selectedGroupId.collectAsStateWithLifecycle()
     val activeGroup = remember(groups, selectedGroupId) { groups.find { it.id == selectedGroupId } }
+    val allMembersList by viewModel.allMembers.collectAsStateWithLifecycle()
     
     var title by remember { mutableStateOf(editingExpense?.title ?: "") }
     var amountStr by remember { mutableStateOf(editingExpense?.amount?.let { if (it % 1 == 0.0) String.format("%.0f", it) else it.toString() } ?: "") }
     var selectedCategory by remember { mutableStateOf(editingExpense?.category ?: "Food") }
     var selectedPayerId by remember { mutableStateOf(editingExpense?.payerId ?: -1) }
+    var selectedActualPayerName by remember { mutableStateOf(editingExpense?.actualPayerName) }
     var splitType by remember { mutableStateOf(editingExpense?.splitType ?: "EQUAL") }
     var isRecurring by remember { mutableStateOf(editingExpense?.isRecurring ?: false) }
 
@@ -1269,6 +1316,7 @@ fun AddExpenseScreen(
             amountStr = if (editingExpense.amount % 1 == 0.0) String.format("%.0f", editingExpense.amount) else editingExpense.amount.toString()
             selectedCategory = editingExpense.category
             selectedPayerId = editingExpense.payerId
+            selectedActualPayerName = editingExpense.actualPayerName
             splitType = editingExpense.splitType
             isRecurring = editingExpense.isRecurring
 
@@ -1403,37 +1451,84 @@ fun AddExpenseScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             members.forEach { m ->
-                val isSelected = selectedPayerId == m.id
-                Card(
-                    modifier = Modifier
-                        .clickable { selectedPayerId = m.id }
-                        .testTag("payer_card_${m.id}"),
-                    colors = CardColors(
-                        containerColor = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surface,
-                        contentColor = MaterialTheme.colorScheme.onSurface,
-                        disabledContainerColor = Color.Transparent,
-                        disabledContentColor = Color.Transparent
-                    ),
-                    border = BorderStroke(
-                        width = if (isSelected) 2.dp else 1.dp,
-                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
-                    ),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
+                val grpId = m.userId?.removePrefix("GROUP_")?.toIntOrNull()
+                val innerMembers = remember(allMembersList, grpId) { if (grpId != null && activeGroup?.groupType == "MULTI_GROUP_TRIP") allMembersList.filter { it.groupId == grpId } else emptyList() }
+
+                if (innerMembers.isNotEmpty()) {
+                    innerMembers.forEach { ind ->
+                        val isSelected = (selectedPayerId == m.id && selectedActualPayerName == ind.name) || (selectedPayerId == m.id && selectedActualPayerName == null && ind == innerMembers.firstOrNull())
+                        Card(
                             modifier = Modifier
-                                .size(24.dp)
-                                .background(Color(android.graphics.Color.parseColor(m.avatarColor)), CircleShape),
-                            contentAlignment = Alignment.Center
+                                .clickable {
+                                    selectedPayerId = m.id
+                                    selectedActualPayerName = ind.name
+                                }
+                                .testTag("payer_card_${m.id}_${ind.id}"),
+                            colors = CardColors(
+                                containerColor = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surface,
+                                contentColor = MaterialTheme.colorScheme.onSurface,
+                                disabledContainerColor = Color.Transparent,
+                                disabledContentColor = Color.Transparent
+                            ),
+                            border = BorderStroke(
+                                width = if (isSelected) 2.dp else 1.dp,
+                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+                            ),
+                            shape = RoundedCornerShape(12.dp)
                         ) {
-                            Text(text = m.name.take(1).uppercase(), fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .background(Color(android.graphics.Color.parseColor(m.avatarColor)), CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(text = ind.name.take(1).uppercase(), fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                }
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(text = "${ind.name} (${m.name})", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(text = m.name, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+                } else {
+                    val isSelected = selectedPayerId == m.id
+                    Card(
+                        modifier = Modifier
+                            .clickable {
+                                selectedPayerId = m.id
+                                selectedActualPayerName = null
+                            }
+                            .testTag("payer_card_${m.id}"),
+                        colors = CardColors(
+                            containerColor = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surface,
+                            contentColor = MaterialTheme.colorScheme.onSurface,
+                            disabledContainerColor = Color.Transparent,
+                            disabledContentColor = Color.Transparent
+                        ),
+                        border = BorderStroke(
+                            width = if (isSelected) 2.dp else 1.dp,
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .background(Color(android.graphics.Color.parseColor(m.avatarColor)), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(text = m.name.take(1).uppercase(), fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                            }
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(text = m.name, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
@@ -1689,7 +1784,8 @@ fun AddExpenseScreen(
                             payerId = selectedPayerId,
                             splitType = splitType,
                             customShares = customShares.toMap(),
-                            isRecurring = isRecurring
+                            isRecurring = isRecurring,
+                            actualPayerName = selectedActualPayerName
                         )
                         if (isRecurring) {
                             viewModel.addRecurringSchedule(
@@ -1711,7 +1807,8 @@ fun AddExpenseScreen(
                             splitType = splitType,
                             customShares = customShares.toMap(),
                             isRecurring = isRecurring,
-                            timestamp = editingExpense.timestamp
+                            timestamp = editingExpense.timestamp,
+                            actualPayerName = selectedActualPayerName
                         )
                     }
                     onSaved()
@@ -2259,7 +2356,7 @@ fun GroupsScreen(
                                             }
                                             else -> {
                                                 val master = groupMembers.firstOrNull()?.name
-                                                val masterTxt = if (master != null) "👑 ${Localization.getString("master_payer", isFarsi)}: $master • " else ""
+                                                val masterTxt = if (master != null && group.groupType == "FAMILY_TRIP") "👑 ${Localization.getString("master_payer", isFarsi)}: $master • " else ""
                                                 masterTxt + groupMembers.joinToString("، ") { it.name }
                                             }
                                         }
@@ -2662,7 +2759,7 @@ fun GroupsScreen(
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Column {
-                                        val masterPayer = grpMembers.firstOrNull()?.name
+                                        val masterPayer = if (grp.groupType == "FAMILY_TRIP") grpMembers.firstOrNull()?.name else null
                                         Text(
                                             text = grp.name + if (masterPayer != null) " (👑 ${Localization.getString("master_payer", isFarsi)}: $masterPayer)" else "",
                                             fontWeight = FontWeight.Bold,
@@ -2764,7 +2861,7 @@ fun GroupsScreen(
                                 availableToAdd.forEach { addGrp ->
                                     val addMems = remember(allMembersList, addGrp.id) { allMembersList.filter { it.groupId == addGrp.id } }
                                     val totalHc = addMems.sumOf { it.headcount.coerceAtLeast(1) }.coerceAtLeast(1)
-                                    val masterPayer = addMems.firstOrNull()?.name
+                                    val masterPayer = if (addGrp.groupType == "FAMILY_TRIP") addMems.firstOrNull()?.name else null
                                     val dispName = if (masterPayer != null) "${addGrp.name} (👑 $masterPayer)" else addGrp.name
                                     FilterChip(
                                         selected = false,
