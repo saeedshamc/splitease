@@ -55,6 +55,15 @@ class RecurringExpenseWorker(
                         )
                         repository.insertExpense(expense, splits)
                         
+                        val prefs = applicationContext.getSharedPreferences("SplitEasePrefs", Context.MODE_PRIVATE)
+                        if (prefs.getBoolean("enableDebtAlerts", true)) {
+                            com.example.util.NotificationHelper.showDebtAlert(
+                                applicationContext,
+                                "🔔 Recurring Bill Due / قبض دوره‌ای",
+                                "New bill added: ${schedule.title} (${schedule.amount})"
+                            )
+                        }
+
                         val interval = getIntervalMillis(schedule.frequency)
                         var updatedDue = schedule.nextDueDate + interval
                         while (updatedDue <= now) {

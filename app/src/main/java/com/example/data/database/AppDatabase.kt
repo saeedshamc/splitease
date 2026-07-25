@@ -22,6 +22,12 @@ interface GroupDao {
     @Query("SELECT * FROM groups ORDER BY createdAt DESC")
     fun getAllGroups(): Flow<List<Group>>
 
+    @Query("SELECT * FROM groups")
+    suspend fun getAllGroupsSync(): List<Group>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertGroups(groups: List<Group>)
+
     @Query("SELECT * FROM groups WHERE id = :id LIMIT 1")
     suspend fun getGroupById(id: Int): Group?
 
@@ -46,6 +52,9 @@ interface MemberDao {
     @Query("SELECT * FROM members")
     fun getAllMembers(): Flow<List<Member>>
 
+    @Query("SELECT * FROM members")
+    suspend fun getAllMembersSync(): List<Member>
+
     @Delete
     suspend fun deleteMember(member: Member)
 }
@@ -69,6 +78,15 @@ interface ExpenseDao {
 
     @Query("SELECT * FROM expenses ORDER BY timestamp DESC")
     fun getAllExpenses(): Flow<List<Expense>>
+
+    @Query("SELECT * FROM expenses")
+    suspend fun getAllExpensesSync(): List<Expense>
+
+    @Query("SELECT * FROM expense_splits")
+    suspend fun getAllSplitsSync(): List<ExpenseSplit>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertExpenses(expenses: List<Expense>)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSplits(splits: List<ExpenseSplit>)
@@ -99,6 +117,12 @@ interface SettlementDao {
 
     @Query("SELECT * FROM settlements WHERE groupId = :groupId")
     suspend fun getSettlementsByGroupSync(groupId: Int): List<Settlement>
+
+    @Query("SELECT * FROM settlements")
+    suspend fun getAllSettlementsSync(): List<Settlement>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSettlements(settlements: List<Settlement>)
 }
 
 @Dao

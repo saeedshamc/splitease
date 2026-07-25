@@ -103,4 +103,24 @@ class ExpenseRepository(private val db: AppDatabase) {
     suspend fun deleteSettlement(settlement: Settlement) {
         db.settlementDao().deleteSettlement(settlement)
     }
+
+    suspend fun getAllGroupsSync(): List<Group> = db.groupDao().getAllGroupsSync()
+    suspend fun getAllMembersSync(): List<Member> = db.memberDao().getAllMembersSync()
+    suspend fun getAllExpensesSync(): List<Expense> = db.expenseDao().getAllExpensesSync()
+    suspend fun getAllSplitsSync(): List<ExpenseSplit> = db.expenseDao().getAllSplitsSync()
+    suspend fun getAllSettlementsSync(): List<Settlement> = db.settlementDao().getAllSettlementsSync()
+
+    suspend fun restoreBackupData(
+        groups: List<Group>,
+        members: List<Member>,
+        expenses: List<Expense>,
+        splits: List<ExpenseSplit>,
+        settlements: List<Settlement>
+    ) {
+        db.groupDao().insertGroups(groups)
+        db.memberDao().insertMembers(members)
+        db.expenseDao().insertExpenses(expenses)
+        db.expenseDao().insertSplits(splits)
+        db.settlementDao().insertSettlements(settlements)
+    }
 }

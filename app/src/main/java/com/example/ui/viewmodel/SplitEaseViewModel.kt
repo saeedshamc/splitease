@@ -48,6 +48,14 @@ class SplitEaseViewModel(application: Application) : AndroidViewModel(applicatio
     private val _customCurrency = MutableStateFlow(sharedPrefs.getString("customCurrency", null))
     val customCurrency: StateFlow<String?> = _customCurrency.asStateFlow()
 
+    private val _enableDebtAlerts = MutableStateFlow(sharedPrefs.getBoolean("enableDebtAlerts", true))
+    val enableDebtAlerts: StateFlow<Boolean> = _enableDebtAlerts.asStateFlow()
+
+    fun toggleDebtAlerts(enabled: Boolean) {
+        _enableDebtAlerts.value = enabled
+        sharedPrefs.edit().putBoolean("enableDebtAlerts", enabled).apply()
+    }
+
     // Groups & Selected Group
     val groups: StateFlow<List<Group>> = repository.groups.stateIn(
         scope = viewModelScope,
@@ -434,6 +442,13 @@ class SplitEaseViewModel(application: Application) : AndroidViewModel(applicatio
             }
 
             repository.insertExpense(expense, splits)
+            if (_enableDebtAlerts.value) {
+                com.example.util.NotificationHelper.showDebtAlert(
+                    getApplication(),
+                    "🔔 New Expense Recorded / هزینه جدید ثبت شد",
+                    "${title.trim()} (${amount}) added to group."
+                )
+            }
         }
     }
 
@@ -670,4 +685,188 @@ class SplitEaseViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun loginGuestAuth(name: String) = authManager.loginAsGuest(name)
     fun logoutAuth() = authManager.logout()
+
+    fun exportDatabaseToJson(onResult: (String?) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val groupsList = repository.getAllGroupsSync()
+                val allMembersList = repository.getAllMembersSync()
+                val allExpensesList = repository.getAllExpensesSync()
+                val allSplitsList = repository.getAllSplitsSync()
+                val allSettlementsList = repository.getAllSettlementsSync()
+
+                val root = org.json.JSONObject()
+                val groupsArr = org.json.JSONArray()
+                groupsList.forEach { g ->
+                    groupsArr.put(org.json.JSONObject().apply {
+                        put("id", g.id)
+                        put("name", g.name)
+                        put("createdAt", g.createdAt)
+                        if (g.outingDate != null) put("outingDate", g.outingDate)
+                        put("isFinished", g.isFinished)
+                        put("groupType", g.groupType)
+                    })
+                }
+                root.put("groups", groupsArr)
+
+                val membersArr = org.json.JSONArray()
+                allMembersList.forEach { m ->
+                    membersArr.put(org.json.JSONObject().apply {
+                        put("id", m.id)
+                        put("groupId", m.groupId)
+                        put("name", m.name)
+                        put("avatarColor", m.avatarColor)
+                        put("headcount", m.headcount)
+                        if (m.userId != null) put("userId", m.userId)
+                    })
+                }
+                root.put("members", membersArr)
+
+                val expensesArr = org.json.JSONArray()
+                allExpensesList.forEach { e ->
+                    expensesArr.put(org.json.JSONObject().apply {
+                        put("id", e.id)
+                        put("groupId", e.groupId)
+                        put("title", e.title)
+                        put("amount", e.amount)
+                        put("category", e.category)
+                        put("payerId", e.payerId)
+                        put("splitType", e.splitType)
+                        put("timestamp", e.timestamp)
+                        put("isRecurring", e.isRecurring)
+                        put("dueDate", e.dueDate)
+                        if (e.actualPayerName != null) put("actualPayerName", e.actualPayerName)
+                    })
+                }
+                root.put("expenses", expensesArr)
+
+                val splitsArr = org.json.JSONArray()
+                allSplitsList.forEach { s ->
+                    splitsArr.put(org.json.JSONObject().apply {
+                        put("id", s.id)
+                        put("expenseId", s.expenseId)
+                        put("memberId", s.memberId)
+                        put("amount", s.amount)
+                        put("percentage", s.percentage)
+                    })
+                }
+                root.put("splits", splitsArr)
+
+                val settlementsArr = org.json.JSONArray()
+                allSettlementsList.forEach { st ->
+                    settlementsArr.put(org.json.JSONObject().apply {
+                        put("id", st.id)
+                        put("groupId", st.groupId)
+                        put("payerId", st.payerId)
+                        put("payeeId", st.payeeId)
+                        put("amount", st.amount)
+                        put("timestamp", st.timestamp)
+                    })
+                }
+                root.put("settlements", settlementsArr)
+
+                onResult(root.toString(2))
+            } catch (e: Exception) {
+                e.printStackTrace()
+                onResult(null)
+            }
+        }
+    }
+
+    fun importDatabaseFromJson(jsonString: String, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val root = org.json.JSONObject(jsonString)
+                val groupsList = mutableListOf<Group>()
+                if (root.has("groups")) {
+                    val arr = root.getJSONArray("groups")
+                    for (i in 0 until arr.length()) {
+                        val obj = arr.getJSONObject(i)
+                        groupsList.add(Group(
+                            id = obj.optInt("id", 0),
+                            name = obj.optString("name", ""),
+                            createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
+                            outingDate = if (obj.has("outingDate") && !obj.isNull("outingDate")) obj.getLong("outingDate") else null,
+                            isFinished = obj.optBoolean("isFinished", false),
+                            groupType = obj.optString("groupType", "FRIENDS")
+                        ))
+                    }
+                }
+
+                val membersList = mutableListOf<Member>()
+                if (root.has("members")) {
+                    val arr = root.getJSONArray("members")
+                    for (i in 0 until arr.length()) {
+                        val obj = arr.getJSONObject(i)
+                        membersList.add(Member(
+                            id = obj.optInt("id", 0),
+                            groupId = obj.optInt("groupId", 0),
+                            name = obj.optString("name", ""),
+                            avatarColor = obj.optString("avatarColor", "#3B82F6"),
+                            headcount = obj.optInt("headcount", 1),
+                            userId = if (obj.has("userId") && !obj.isNull("userId")) obj.getString("userId") else null
+                        ))
+                    }
+                }
+
+                val expensesList = mutableListOf<Expense>()
+                if (root.has("expenses")) {
+                    val arr = root.getJSONArray("expenses")
+                    for (i in 0 until arr.length()) {
+                        val obj = arr.getJSONObject(i)
+                        expensesList.add(Expense(
+                            id = obj.optInt("id", 0),
+                            groupId = obj.optInt("groupId", 0),
+                            title = obj.optString("title", ""),
+                            amount = obj.optDouble("amount", 0.0),
+                            category = obj.optString("category", "Other"),
+                            payerId = obj.optInt("payerId", 0),
+                            splitType = obj.optString("splitType", "EQUAL"),
+                            timestamp = obj.optLong("timestamp", System.currentTimeMillis()),
+                            isRecurring = obj.optBoolean("isRecurring", false),
+                            dueDate = obj.optLong("dueDate", 0L),
+                            actualPayerName = if (obj.has("actualPayerName") && !obj.isNull("actualPayerName")) obj.getString("actualPayerName") else null
+                        ))
+                    }
+                }
+
+                val splitsList = mutableListOf<ExpenseSplit>()
+                if (root.has("splits")) {
+                    val arr = root.getJSONArray("splits")
+                    for (i in 0 until arr.length()) {
+                        val obj = arr.getJSONObject(i)
+                        splitsList.add(ExpenseSplit(
+                            id = obj.optInt("id", 0),
+                            expenseId = obj.optInt("expenseId", 0),
+                            memberId = obj.optInt("memberId", 0),
+                            amount = obj.optDouble("amount", 0.0),
+                            percentage = obj.optDouble("percentage", 0.0)
+                        ))
+                    }
+                }
+
+                val settlementsList = mutableListOf<Settlement>()
+                if (root.has("settlements")) {
+                    val arr = root.getJSONArray("settlements")
+                    for (i in 0 until arr.length()) {
+                        val obj = arr.getJSONObject(i)
+                        settlementsList.add(Settlement(
+                            id = obj.optInt("id", 0),
+                            groupId = obj.optInt("groupId", 0),
+                            payerId = obj.optInt("payerId", 0),
+                            payeeId = obj.optInt("payeeId", 0),
+                            amount = obj.optDouble("amount", 0.0),
+                            timestamp = obj.optLong("timestamp", System.currentTimeMillis())
+                        ))
+                    }
+                }
+
+                repository.restoreBackupData(groupsList, membersList, expensesList, splitsList, settlementsList)
+                onResult(true, "بازیابی اطلاعات با موفقیت انجام شد / Restore completed successfully (${groupsList.size} groups, ${expensesList.size} expenses)")
+            } catch (e: Exception) {
+                e.printStackTrace()
+                onResult(false, "خطا در خواندن فایل پشتیبان / Invalid JSON backup format: ${e.message}")
+            }
+        }
+    }
 }
