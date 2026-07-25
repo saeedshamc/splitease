@@ -43,6 +43,9 @@ interface MemberDao {
     @Query("SELECT * FROM members WHERE groupId = :groupId")
     suspend fun getMembersByGroupSync(groupId: Int): List<Member>
 
+    @Query("SELECT * FROM members")
+    fun getAllMembers(): Flow<List<Member>>
+
     @Delete
     suspend fun deleteMember(member: Member)
 }
@@ -63,6 +66,9 @@ interface ExpenseDao {
 
     @Query("SELECT * FROM expenses WHERE groupId = :groupId")
     suspend fun getExpensesByGroupSync(groupId: Int): List<Expense>
+
+    @Query("SELECT * FROM expenses ORDER BY timestamp DESC")
+    fun getAllExpenses(): Flow<List<Expense>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSplits(splits: List<ExpenseSplit>)

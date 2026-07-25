@@ -50,7 +50,6 @@ import com.example.ui.theme.Localization
 import com.example.ui.theme.ColorExpense
 import com.example.ui.theme.ColorIncome
 import com.example.ui.theme.ColorNeutral
-import com.example.ui.components.AuthDialog
 import com.example.ui.viewmodel.SettleTransaction
 import com.example.ui.viewmodel.SplitEaseViewModel
 import kotlinx.coroutines.launch
@@ -93,8 +92,6 @@ fun SplitEaseApp(viewModel: SplitEaseViewModel) {
     val groups by viewModel.groups.collectAsStateWithLifecycle()
     val selectedGroupId by viewModel.selectedGroupId.collectAsStateWithLifecycle()
     val members by viewModel.currentMembers.collectAsStateWithLifecycle()
-    val currentUser by viewModel.currentUser.collectAsStateWithLifecycle()
-    var showAuthDialog by remember { mutableStateOf(false) }
     
     val context = LocalContext.current
     val activeGroup = groups.find { it.id == selectedGroupId }
@@ -135,16 +132,6 @@ fun SplitEaseApp(viewModel: SplitEaseViewModel) {
                     }
                 },
                 actions = {
-                    IconButton(
-                        onClick = { showAuthDialog = true },
-                        modifier = Modifier.testTag("account_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.AccountCircle,
-                            contentDescription = "User Account",
-                            tint = if (currentUser?.isOnlineAuth == true) Color(0xFF4CAF50) else MaterialTheme.colorScheme.primary
-                        )
-                    }
                     // Fast locale / theme quick-toggles in the bar
                     IconButton(
                         onClick = { viewModel.toggleLanguage() },
@@ -278,13 +265,6 @@ fun SplitEaseApp(viewModel: SplitEaseViewModel) {
                         customCurrency = customCurrency
                     )
                 }
-            }
-            if (showAuthDialog) {
-                AuthDialog(
-                    viewModel = viewModel,
-                    isFarsi = isFarsi,
-                    onDismiss = { showAuthDialog = false }
-                )
             }
         }
     }
@@ -1921,9 +1901,12 @@ fun GroupsScreen(
 ) {
     val groups by viewModel.groups.collectAsStateWithLifecycle()
     val selectedGroupId by viewModel.selectedGroupId.collectAsStateWithLifecycle()
+    val allMembersList by viewModel.allMembers.collectAsStateWithLifecycle()
+    val allExpensesList by viewModel.allExpenses.collectAsStateWithLifecycle()
 
     var showCreateDialog by remember { mutableStateOf(false) }
     var showArchived by remember { mutableStateOf(false) }
+    var selectedGroupForAddMember by remember { mutableStateOf<Group?>(null) }
 
     // Separate active vs archived groups
     val activeGroupsList = remember(groups) { groups.filter { !it.isFinished } }
@@ -2003,6 +1986,11 @@ fun GroupsScreen(
             ) {
                 items(displayedGroups) { group ->
                     val isSelected = group.id == selectedGroupId
+                    val groupMembers = remember(allMembersList, group.id) { allMembersList.filter { it.groupId == group.id } }
+                    val groupExpenses = remember(allExpensesList, group.id) { allExpensesList.filter { it.groupId == group.id } }
+                    val totalSpent = groupExpenses.sumOf { it.amount }
+                    val totalHeadcount = groupMembers.sumOf { it.headcount.coerceAtLeast(1) }
+
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -2067,7 +2055,7 @@ fun GroupsScreen(
                                         color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
 
-                                    // Status Badge (Ongoing / Finished)
+                                    // Status Badge & Type Badge
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -2087,6 +2075,49 @@ fun GroupsScreen(
                                                 color = badgeColor
                                             )
                                         }
+
+                                        val typeBadgeColor = if (group.groupType == "FAMILY_TRIP") Color(0xFFE91E63) else Color(0xFF2196F3)
+                                        val typeText = if (group.groupType == "FAMILY_TRIP") {
+                                            if (isFarsi) "خانوادگی ($totalHeadcount نفر)" else "Family ($totalHeadcount hc)"
+                                        } else {
+                                            if (isFarsi) "انفرادی/دوستانه (${groupMembers.size} نفر)" else "Standard (${groupMembers.size} m)"
+                                        }
+                                        Box(
+                                            modifier = Modifier
+                                                .background(typeBadgeColor.copy(alpha = 0.15f), RoundedCornerShape(4.dp))
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = typeText,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = typeBadgeColor
+                                            )
+                                        }
+                                    }
+
+                                    if (groupMembers.isNotEmpty()) {
+                                        val membersStr = if (group.groupType == "FAMILY_TRIP") {
+                                            groupMembers.joinToString("، ") { "${it.name} (${it.headcount} نفر)" }
+                                        } else {
+                                            groupMembers.joinToString("، ") { it.name }
+                                        }
+                                        Text(
+                                            text = (if (isFarsi) "اعضا: " else "Members: ") + membersStr,
+                                            fontSize = 11.sp,
+                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.9f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(top = 4.dp)
+                                        )
+                                    }
+
+                                    if (totalSpent > 0 || group.isFinished) {
+                                        Text(
+                                            text = (if (isFarsi) "مجموع مخارج: " else "Total Spent: ") + Localization.formatCurrency(totalSpent, isFarsi, customCurrency),
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.padding(top = 2.dp)
+                                        )
                                     }
                                 }
                             }
@@ -2095,6 +2126,19 @@ fun GroupsScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
+                                if (!group.isFinished) {
+                                    IconButton(
+                                        onClick = { selectedGroupForAddMember = group },
+                                        modifier = Modifier.testTag("add_member_btn_${group.id}")
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.PersonAdd,
+                                            contentDescription = "Add Member",
+                                            tint = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+
                                 // Toggle finish / ongoing
                                 IconButton(
                                     onClick = { viewModel.toggleGroupFinished(group) },
@@ -2323,6 +2367,70 @@ fun GroupsScreen(
             }
         }
     }
+
+    if (selectedGroupForAddMember != null) {
+        val grp = selectedGroupForAddMember!!
+        var newMemberName by remember { mutableStateOf("") }
+        var newMemberHeadcount by remember { mutableStateOf(1) }
+
+        Dialog(onDismissRequest = { selectedGroupForAddMember = null }) {
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp).fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Text(
+                        text = if (isFarsi) "افزودن عضو جدید به ${grp.name}" else "Add Member to ${grp.name}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    OutlinedTextField(
+                        value = newMemberName,
+                        onValueChange = { newMemberName = it },
+                        label = { Text(Localization.getString("member_name", isFarsi)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp)
+                    )
+                    if (grp.groupType == "FAMILY_TRIP") {
+                        OutlinedTextField(
+                            value = newMemberHeadcount.toString(),
+                            onValueChange = { str -> newMemberHeadcount = str.toIntOrNull()?.coerceAtLeast(1) ?: 1 },
+                            label = { Text(Localization.getString("headcount", isFarsi)) },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(onClick = { selectedGroupForAddMember = null }) {
+                            Text(Localization.getString("cancel", isFarsi))
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Button(
+                            onClick = {
+                                if (newMemberName.isNotBlank()) {
+                                    val colors = listOf("#FF6B6B", "#4DABF7", "#51CF66", "#FCC419", "#FF922B", "#CC5DE8", "#20C997")
+                                    val randomColor = colors.random()
+                                    viewModel.addMember(newMemberName.trim(), randomColor, newMemberHeadcount, targetGroupId = grp.id)
+                                    selectedGroupForAddMember = null
+                                }
+                            },
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text(Localization.getString("add", isFarsi))
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 
@@ -2335,10 +2443,12 @@ fun SettingsScreen(
 ) {
     val isDarkMode by viewModel.isDarkMode.collectAsStateWithLifecycle()
     var currencyInput by remember { mutableStateOf(customCurrency ?: "") }
+    val scrollState = rememberScrollState()
 
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(scrollState)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
@@ -2557,6 +2667,42 @@ fun SettingsScreen(
                 }
             }
         }
+
+        // About / Offline Mode Info Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f))
+        ) {
+            Row(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Info,
+                    contentDescription = "Info",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(
+                        text = if (isFarsi) "حالت آفلاین و ماشین‌حساب سریع" else "Offline Calculator Utility",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = if (isFarsi) "تمامی محاسبات، بایگانی‌ها و اطلاعات به‌صورت محلی و بدون نیاز به اینترنت یا ورود به حساب کاربری ذخیره می‌شوند." else "All splitting, history, and records are stored 100% locally on device without needing internet or login.",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(32.dp))
     }
 }
 

@@ -87,6 +87,12 @@ class SplitEaseViewModel(application: Application) : AndroidViewModel(applicatio
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val allMembers: StateFlow<List<Member>> = repository.allMembers
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val allExpenses: StateFlow<List<Expense>> = repository.allExpenses
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     // Month & Year Filter for Reports
     private val calendar = Calendar.getInstance().apply {
         // Default to July 2026 as per local metadata time, or current device month
@@ -309,8 +315,8 @@ class SplitEaseViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun addMember(name: String, color: String, headcount: Int = 1, userId: String? = null) {
-        val gId = _selectedGroupId.value
+    fun addMember(name: String, color: String, headcount: Int = 1, userId: String? = null, targetGroupId: Int? = null) {
+        val gId = targetGroupId ?: _selectedGroupId.value
         if (gId == -1) return
         viewModelScope.launch {
             repository.insertMember(gId, name, color, headcount, userId)

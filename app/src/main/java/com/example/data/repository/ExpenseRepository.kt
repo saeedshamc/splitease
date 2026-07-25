@@ -27,6 +27,8 @@ class ExpenseRepository(private val db: AppDatabase) {
 
     fun getMembersForGroup(groupId: Int): Flow<List<Member>> = db.memberDao().getMembersByGroup(groupId)
 
+    val allMembers: Flow<List<Member>> = db.memberDao().getAllMembers()
+
     suspend fun getMembersForGroupSync(groupId: Int): List<Member> = db.memberDao().getMembersByGroupSync(groupId)
 
     suspend fun insertMember(groupId: Int, name: String, avatarColor: String, headcount: Int = 1, userId: String? = null): Long {
@@ -58,6 +60,8 @@ class ExpenseRepository(private val db: AppDatabase) {
     suspend fun getAllActiveSchedulesSync(): List<RecurringSchedule> = db.recurringScheduleDao().getAllActiveSchedulesSync()
 
     fun getExpensesForGroup(groupId: Int): Flow<List<Expense>> = db.expenseDao().getExpensesByGroup(groupId)
+
+    val allExpenses: Flow<List<Expense>> = db.expenseDao().getAllExpenses()
 
     suspend fun getExpensesForGroupSync(groupId: Int): List<Expense> = db.expenseDao().getExpensesByGroupSync(groupId)
 
