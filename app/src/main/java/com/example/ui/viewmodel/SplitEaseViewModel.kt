@@ -588,6 +588,11 @@ class SplitEaseViewModel(application: Application) : AndroidViewModel(applicatio
                 if (schedule.nextDueDate <= now && schedule.isActive) {
                     val membersList = repository.getMembersForGroupSync(schedule.groupId)
                     if (membersList.isNotEmpty()) {
+                        val interval = when (schedule.frequency.uppercase()) {
+                            "WEEKLY", "هفتگی" -> 86400000L * 7L
+                            "YEARLY", "ساله", "سالانه" -> 86400000L * 365L
+                            else -> 86400000L * 30L
+                        }
                         val splits = mutableListOf<ExpenseSplit>()
                         val portion = schedule.amount / membersList.size
                         membersList.forEach { member ->
@@ -602,10 +607,14 @@ class SplitEaseViewModel(application: Application) : AndroidViewModel(applicatio
                             splitType = schedule.splitType,
                             timestamp = now,
                             isRecurring = true,
-                            dueDate = now + 86400000L * 30L
+                            dueDate = now + interval
                         )
                         repository.insertExpense(expense, splits)
-                        repository.updateSchedule(schedule.copy(nextDueDate = now + 86400000L * 30L))
+                        var updatedDue = schedule.nextDueDate + interval
+                        while (updatedDue <= now) {
+                            updatedDue += interval
+                        }
+                        repository.updateSchedule(schedule.copy(nextDueDate = updatedDue))
                     }
                 }
             }
@@ -635,6 +644,7 @@ class SplitEaseViewModel(application: Application) : AndroidViewModel(applicatio
                 isActive = true
             )
             repository.insertSchedule(schedule)
+            com.example.data.worker.RecurringWorkScheduler.runImmediateCheck(getApplication())
         }
     }
 

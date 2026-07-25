@@ -10,6 +10,7 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -106,6 +107,10 @@ fun SplitEaseApp(viewModel: SplitEaseViewModel) {
         if (editingExpense != null) {
             currentTab = SplitEaseTab.ADD_EXPENSE
         }
+    }
+
+    LaunchedEffect(Unit) {
+        com.example.data.worker.RecurringWorkScheduler.setupPeriodicWork(context)
     }
 
     Scaffold(
@@ -290,6 +295,7 @@ fun DashboardScreen(
     
     var showSettleDialog by remember { mutableStateOf<SettleTransaction?>(null) }
     var activeHistoryView by remember { mutableStateOf(false) } // toggle between settlements & expenses in activity history
+    var showPdfExportDialog by remember { mutableStateOf(false) }
 
     val activeGroup = groups.find { it.id == selectedGroupId }
 
@@ -390,20 +396,7 @@ fun DashboardScreen(
             val costPerPerson = if (totalHc > 0) totalExp / totalHc else 0.0
 
             Button(
-                onClick = {
-                    com.example.ui.components.PdfReportGenerator.generateAndSharePdf(
-                        context = context,
-                        group = activeGroup,
-                        members = members,
-                        allMembersList = allMembersList,
-                        expenses = expenses,
-                        balances = balances,
-                        costPerPerson = costPerPerson,
-                        isFarsi = isFarsi,
-                        customCurrency = customCurrency,
-                        reportTitle = if (isFarsi) "گزارش مالی و تفکیک حساب: ${activeGroup.name}" else "Financial Report: ${activeGroup.name}"
-                    )
-                },
+                onClick = { showPdfExportDialog = true },
                 modifier = Modifier.fillMaxWidth().testTag("dashboard_export_pdf_btn"),
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
@@ -1096,6 +1089,45 @@ fun DashboardScreen(
                 }
             }
         }
+    }
+
+    if (showPdfExportDialog) {
+        val totalExp = expenses.sumOf { it.amount }
+        val totalHc = members.sumOf { it.headcount.coerceAtLeast(1) }.coerceAtLeast(1)
+        val costPerPerson = if (totalHc > 0) totalExp / totalHc else 0.0
+
+        com.example.ui.components.PdfExportDialog(
+            onDismiss = { showPdfExportDialog = false },
+            onSaveLocally = {
+                com.example.ui.components.PdfReportGenerator.savePdfLocally(
+                    context = context,
+                    group = activeGroup,
+                    members = members,
+                    allMembersList = allMembersList,
+                    expenses = expenses,
+                    balances = balances,
+                    costPerPerson = costPerPerson,
+                    isFarsi = isFarsi,
+                    customCurrency = customCurrency,
+                    reportTitle = if (isFarsi) "گزارش مالی و تفکیک حساب: ${activeGroup.name}" else "Financial Report: ${activeGroup.name}"
+                )
+            },
+            onShareDirectly = {
+                com.example.ui.components.PdfReportGenerator.generateAndSharePdf(
+                    context = context,
+                    group = activeGroup,
+                    members = members,
+                    allMembersList = allMembersList,
+                    expenses = expenses,
+                    balances = balances,
+                    costPerPerson = costPerPerson,
+                    isFarsi = isFarsi,
+                    customCurrency = customCurrency,
+                    reportTitle = if (isFarsi) "گزارش مالی و تفکیک حساب: ${activeGroup.name}" else "Financial Report: ${activeGroup.name}"
+                )
+            },
+            isFarsi = isFarsi
+        )
     }
 }
 
@@ -1874,6 +1906,7 @@ fun ReportsScreen(
     val selectedGroupId by viewModel.selectedGroupId.collectAsStateWithLifecycle()
     val activeGroup = remember(groups, selectedGroupId) { groups.find { it.id == selectedGroupId } }
     val balances by viewModel.memberBalances.collectAsStateWithLifecycle()
+    var showPdfExportDialog by remember { mutableStateOf(false) }
 
     val reportMonth by viewModel.reportMonth.collectAsStateWithLifecycle()
     val reportYear by viewModel.reportYear.collectAsStateWithLifecycle()
@@ -1989,25 +2022,7 @@ fun ReportsScreen(
         }
 
         Button(
-            onClick = {
-                com.example.ui.components.PdfReportGenerator.generateAndSharePdf(
-                    context = context,
-                    group = activeGroup,
-                    members = members,
-                    allMembersList = allMembersList,
-                    expenses = if (activeGroup != null) expenses else filteredExpenses,
-                    balances = balances,
-                    costPerPerson = costPerPerson,
-                    isFarsi = isFarsi,
-                    customCurrency = customCurrency,
-                    reportTitle = if (activeGroup != null) {
-                        if (isFarsi) "گزارش مالی و تفکیک حساب: ${activeGroup.name}" else "Financial Report: ${activeGroup.name}"
-                    } else {
-                        val mName = if (isFarsi) listOf("ژانویه", "فوریه", "مارس", "آوریل", "مه", "ژوئن", "ژوئیه", "اوت", "سپتامبر", "اکتبر", "نوامبر", "دسامبر")[reportMonth - 1] else listOf("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")[reportMonth - 1]
-                        if (isFarsi) "گزارش مخارج ماهانه $mName ${Localization.formatNumber(reportYear.toDouble(), isFarsi)}" else "Monthly Expense Report - $mName $reportYear"
-                    }
-                )
-            },
+            onClick = { showPdfExportDialog = true },
             modifier = Modifier.fillMaxWidth().testTag("export_pdf_btn"),
             shape = RoundedCornerShape(14.dp),
             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
@@ -2166,6 +2181,51 @@ fun ReportsScreen(
             }
         }
     }
+
+    if (showPdfExportDialog) {
+        val totalExp = (if (activeGroup != null) expenses else filteredExpenses).sumOf { it.amount }
+        val totalHc = members.sumOf { it.headcount.coerceAtLeast(1) }.coerceAtLeast(1)
+        val costPerPerson = if (totalHc > 0) totalExp / totalHc else 0.0
+        val title = if (activeGroup != null) {
+            if (isFarsi) "گزارش مالی و تفکیک حساب: ${activeGroup.name}" else "Financial Report: ${activeGroup.name}"
+        } else {
+            val mName = if (isFarsi) listOf("ژانویه", "فوریه", "مارس", "آوریل", "مه", "ژوئن", "ژوئیه", "اوت", "سپتامبر", "اکتبر", "نوامبر", "دسامبر")[reportMonth - 1] else listOf("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")[reportMonth - 1]
+            if (isFarsi) "گزارش مخارج ماهانه $mName ${Localization.formatNumber(reportYear.toDouble(), isFarsi)}" else "Monthly Expense Report - $mName $reportYear"
+        }
+
+        com.example.ui.components.PdfExportDialog(
+            onDismiss = { showPdfExportDialog = false },
+            onSaveLocally = {
+                com.example.ui.components.PdfReportGenerator.savePdfLocally(
+                    context = context,
+                    group = activeGroup,
+                    members = members,
+                    allMembersList = allMembersList,
+                    expenses = if (activeGroup != null) expenses else filteredExpenses,
+                    balances = balances,
+                    costPerPerson = costPerPerson,
+                    isFarsi = isFarsi,
+                    customCurrency = customCurrency,
+                    reportTitle = title
+                )
+            },
+            onShareDirectly = {
+                com.example.ui.components.PdfReportGenerator.generateAndSharePdf(
+                    context = context,
+                    group = activeGroup,
+                    members = members,
+                    allMembersList = allMembersList,
+                    expenses = if (activeGroup != null) expenses else filteredExpenses,
+                    balances = balances,
+                    costPerPerson = costPerPerson,
+                    isFarsi = isFarsi,
+                    customCurrency = customCurrency,
+                    reportTitle = title
+                )
+            },
+            isFarsi = isFarsi
+        )
+    }
 }
 
 
@@ -2180,6 +2240,12 @@ fun GroupsScreen(
     val selectedGroupId by viewModel.selectedGroupId.collectAsStateWithLifecycle()
     val allMembersList by viewModel.allMembers.collectAsStateWithLifecycle()
     val allExpensesList by viewModel.allExpenses.collectAsStateWithLifecycle()
+    val balances by viewModel.memberBalances.collectAsStateWithLifecycle()
+    val currentMembers by viewModel.currentMembers.collectAsStateWithLifecycle()
+    val currentExpenses by viewModel.currentExpenses.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    var showQuickSettlementDialog by remember { mutableStateOf(false) }
+    var showPdfExportDialog by remember { mutableStateOf(false) }
 
     var showCreateDialog by remember { mutableStateOf(false) }
     var showCreateTripDialog by remember { mutableStateOf(false) }
@@ -2195,12 +2261,13 @@ fun GroupsScreen(
     val activeGroupsList = remember(tabGroups) { tabGroups.filter { !it.isFinished } }
     val archivedGroupsList = remember(tabGroups) { tabGroups.filter { it.isFinished } }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
         // Segmented Main Tabs: Trips & Parties vs Groups & Families
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -2508,6 +2575,29 @@ fun GroupsScreen(
                 }
             }
         }
+        }
+        
+        ExtendedFloatingActionButton(
+        onClick = {
+            if (selectedGroupId == -1 && activeGroupsList.isNotEmpty()) {
+                viewModel.selectGroup(activeGroupsList.first().id)
+            }
+            showQuickSettlementDialog = true
+        },
+        modifier = Modifier
+            .align(Alignment.BottomEnd)
+            .padding(16.dp)
+            .testTag("quick_settlement_fab"),
+        containerColor = MaterialTheme.colorScheme.primary,
+        contentColor = MaterialTheme.colorScheme.onPrimary,
+        icon = { Icon(imageVector = Icons.Rounded.Paid, contentDescription = "Quick Settlement") },
+        text = {
+            Text(
+                text = if (isFarsi) "تسویه سریع اعضا" else "Quick Settlement",
+                fontWeight = FontWeight.Bold
+            )
+        }
+    )
     }
 
     // Create Group Dialog popup
@@ -2980,6 +3070,241 @@ fun GroupsScreen(
                 }
             }
         }
+    }
+
+    if (showQuickSettlementDialog) {
+        val activeGroup = groups.find { it.id == selectedGroupId } ?: activeGroupsList.firstOrNull()
+        val totalExp = currentExpenses.sumOf { it.amount }
+        val totalHc = currentMembers.sumOf { it.headcount.coerceAtLeast(1) }.coerceAtLeast(1)
+        val costPerPerson = if (totalHc > 0) totalExp / totalHc else 0.0
+
+        Dialog(onDismissRequest = { showQuickSettlementDialog = false }) {
+            Card(
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (isFarsi) "⚡ تسویه حساب سریع اعضا" else "⚡ Quick Settlement",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        IconButton(onClick = { showQuickSettlementDialog = false }) {
+                            Icon(imageVector = Icons.Rounded.Close, contentDescription = "Close")
+                        }
+                    }
+
+                    if (activeGroupsList.size > 1) {
+                        Text(
+                            text = if (isFarsi) "انتخاب گروه فعال:" else "Select Active Group:",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            items(activeGroupsList) { grp ->
+                                FilterChip(
+                                    selected = grp.id == selectedGroupId,
+                                    onClick = { viewModel.selectGroup(grp.id) },
+                                    label = { Text(grp.name, fontWeight = FontWeight.Bold) }
+                                )
+                            }
+                        }
+                    }
+
+                    if (activeGroup == null || currentMembers.isEmpty()) {
+                        Text(
+                            text = if (isFarsi) "عضوی برای تسویه وجود ندارد یا گروهی انتخاب نشده است." else "No members or active group selected.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        Text(
+                            text = (if (isFarsi) "گروه: " else "Group: ") + activeGroup.name + " | " + (if (isFarsi) "سرانه: " else "Per Person: ") + Localization.formatCurrency(costPerPerson, isFarsi, customCurrency),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.secondary,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 350.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            items(currentMembers) { m ->
+                                val grpId = m.userId?.removePrefix("GROUP_")?.toIntOrNull()
+                                val masterPayer = if (grpId != null) allMembersList.find { it.groupId == grpId }?.name else null
+                                val grpShare = costPerPerson * m.headcount.coerceAtLeast(1)
+                                val grpPaid = currentExpenses.filter { it.payerId == m.id }.sumOf { it.amount }
+                                val netBal = balances[m.id] ?: (grpPaid - grpShare)
+
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (netBal > 0) Color(0xFF10B981).copy(alpha = 0.1f)
+                                        else if (netBal < -1.0) Color(0xFFEF4444).copy(alpha = 0.1f)
+                                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                    ),
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column {
+                                                Text(
+                                                    text = m.name + if (masterPayer != null) " (👑 $masterPayer)" else "",
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 14.sp
+                                                )
+                                                Text(
+                                                    text = "${m.headcount} ${if (isFarsi) "نفر" else "person"}",
+                                                    fontSize = 11.sp,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+
+                                            val balTxt = if (kotlin.math.abs(netBal) < 1.0) {
+                                                if (isFarsi) "تسویه کامل" else "Settled"
+                                            } else if (netBal > 0) {
+                                                (if (isFarsi) "دریافت: +" else "Receives: +") + Localization.formatCurrency(netBal, isFarsi, customCurrency)
+                                            } else {
+                                                (if (isFarsi) "پرداخت: -" else "Owes: -") + Localization.formatCurrency(kotlin.math.abs(netBal), isFarsi, customCurrency)
+                                            }
+                                            val balColor = if (netBal > 0) Color(0xFF059669) else if (netBal < -1.0) Color(0xFFDC2626) else MaterialTheme.colorScheme.onSurfaceVariant
+
+                                            Text(
+                                                text = balTxt,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                fontSize = 13.sp,
+                                                color = balColor
+                                            )
+                                        }
+
+                                        val innerMems = if (grpId != null) allMembersList.filter { it.groupId == grpId } else emptyList()
+                                        if (innerMems.isNotEmpty()) {
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), modifier = Modifier.padding(vertical = 4.dp))
+                                            Text(
+                                                text = if (isFarsi) "👥 وضعیت داخلی خانواده:" else "👥 Inner Family Breakdown:",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.secondary
+                                            )
+                                            innerMems.forEachIndexed { idx, ind ->
+                                                val indShare = costPerPerson * ind.headcount.coerceAtLeast(1)
+                                                val indPaid = currentExpenses.filter { it.payerId == m.id && (it.actualPayerName == ind.name || (it.actualPayerName == null && idx == 0)) }.sumOf { it.amount }
+                                                val indNet = indPaid - indShare
+                                                val indBalTxt = if (kotlin.math.abs(indNet) < 1.0) (if (isFarsi) "تسویه" else "Settled")
+                                                else if (indNet > 0) "+" + Localization.formatCurrency(indNet, isFarsi, customCurrency)
+                                                else "-" + Localization.formatCurrency(kotlin.math.abs(indNet), isFarsi, customCurrency)
+
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                                                    horizontalArrangement = Arrangement.SpaceBetween
+                                                ) {
+                                                    Text(" • ${ind.name} (${ind.headcount} ${if (isFarsi) "نفر" else "p"})", fontSize = 11.sp)
+                                                    Text(indBalTxt, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (indNet > 0) Color(0xFF059669) else if (indNet < -1.0) Color(0xFFDC2626) else MaterialTheme.colorScheme.onSurfaceVariant)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Button(
+                            onClick = { showPdfExportDialog = true },
+                            modifier = Modifier.fillMaxWidth().testTag("quick_settle_pdf_btn"),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Icon(imageVector = Icons.Rounded.Share, contentDescription = "PDF", modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (isFarsi) "📄 دریافت گزارش PDF و اشتراک‌گذاری" else "📄 Export & Share PDF Report",
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    OutlinedButton(
+                        onClick = { showQuickSettlementDialog = false },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(text = if (isFarsi) "بستن" else "Close", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+
+    if (showPdfExportDialog) {
+        val activeGroup = groups.find { it.id == selectedGroupId } ?: activeGroupsList.firstOrNull()
+        val totalExp = currentExpenses.sumOf { it.amount }
+        val totalHc = currentMembers.sumOf { it.headcount.coerceAtLeast(1) }.coerceAtLeast(1)
+        val costPerPerson = if (totalHc > 0) totalExp / totalHc else 0.0
+        val title = if (activeGroup != null) {
+            if (isFarsi) "گزارش مالی و تفکیک حساب: ${activeGroup.name}" else "Financial Report: ${activeGroup.name}"
+        } else {
+            if (isFarsi) "گزارش مالی اعضا" else "Members Financial Report"
+        }
+
+        com.example.ui.components.PdfExportDialog(
+            onDismiss = { showPdfExportDialog = false },
+            onSaveLocally = {
+                com.example.ui.components.PdfReportGenerator.savePdfLocally(
+                    context = context,
+                    group = activeGroup,
+                    members = currentMembers,
+                    allMembersList = allMembersList,
+                    expenses = currentExpenses,
+                    balances = balances,
+                    costPerPerson = costPerPerson,
+                    isFarsi = isFarsi,
+                    customCurrency = customCurrency,
+                    reportTitle = title
+                )
+            },
+            onShareDirectly = {
+                com.example.ui.components.PdfReportGenerator.generateAndSharePdf(
+                    context = context,
+                    group = activeGroup,
+                    members = currentMembers,
+                    allMembersList = allMembersList,
+                    expenses = currentExpenses,
+                    balances = balances,
+                    costPerPerson = costPerPerson,
+                    isFarsi = isFarsi,
+                    customCurrency = customCurrency,
+                    reportTitle = title
+                )
+            },
+            isFarsi = isFarsi
+        )
     }
 }
 
