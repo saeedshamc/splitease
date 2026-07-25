@@ -296,6 +296,7 @@ fun DashboardScreen(
     var showSettleDialog by remember { mutableStateOf<SettleTransaction?>(null) }
     var activeHistoryView by remember { mutableStateOf(false) } // toggle between settlements & expenses in activity history
     var showPdfExportDialog by remember { mutableStateOf(false) }
+    var expenseSearchQuery by remember { mutableStateOf("") }
 
     val activeGroup = groups.find { it.id == selectedGroupId }
 
@@ -305,6 +306,21 @@ fun DashboardScreen(
             isFarsi = isFarsi
         )
         return
+    }
+
+    val searchedExpenses = remember(expenses, expenseSearchQuery, members) {
+        if (expenseSearchQuery.isBlank()) expenses else {
+            val q = expenseSearchQuery.trim().lowercase()
+            val sdf = SimpleDateFormat("yyyy/MM/dd", Locale.getDefault())
+            expenses.filter { exp ->
+                val payerName = members.find { it.id == exp.payerId }?.name ?: ""
+                val dateStr = sdf.format(Date(exp.timestamp))
+                exp.title.lowercase().contains(q) ||
+                exp.category.lowercase().contains(q) ||
+                payerName.lowercase().contains(q) ||
+                dateStr.contains(q)
+            }
+        }
     }
 
     LazyColumn(
@@ -642,6 +658,81 @@ fun DashboardScreen(
             }
         }
 
+        // Top Debts & Fast Settle Summary Component
+        if (smartTx.isNotEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.85f)),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.5f))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Rounded.EmojiEvents,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = Localization.getString("top_debtors_creditors", isFarsi),
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                        }
+                        
+                        smartTx.take(3).forEach { tx ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f), RoundedCornerShape(10.dp))
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "${tx.debtor.name} ➔ ${tx.creditor.name}",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = Localization.formatCurrency(tx.amount, isFarsi, customCurrency),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = Color(0xFFEF4444)
+                                    )
+                                }
+                                Button(
+                                    onClick = {
+                                        viewModel.settleDebt(tx.debtor.id, tx.creditor.id, tx.amount)
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                    modifier = Modifier.testTag("fast_settle_${tx.debtor.id}_${tx.creditor.id}")
+                                ) {
+                                    Text(
+                                        text = Localization.getString("one_tap_settle", isFarsi),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onTertiary
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // Smart Settlements
         item {
             Text(
@@ -924,8 +1015,23 @@ fun DashboardScreen(
         }
 
         if (!activeHistoryView) {
+            item {
+                OutlinedTextField(
+                    value = expenseSearchQuery,
+                    onValueChange = { expenseSearchQuery = it },
+                    placeholder = { Text(Localization.getString("search_expenses", isFarsi), fontSize = 12.sp) },
+                    leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                    trailingIcon = if (expenseSearchQuery.isNotEmpty()) {
+                        { IconButton(onClick = { expenseSearchQuery = "" }) { Icon(Icons.Rounded.Clear, contentDescription = "Clear") } }
+                    } else null,
+                    modifier = Modifier.fillMaxWidth().testTag("expense_search_input"),
+                    shape = RoundedCornerShape(12.dp),
+                    singleLine = true
+                )
+            }
+
             // Expenses History List
-            if (expenses.isEmpty()) {
+            if (searchedExpenses.isEmpty()) {
                 item {
                     Column(
                         modifier = Modifier
@@ -951,7 +1057,7 @@ fun DashboardScreen(
                     }
                 }
             } else {
-                items(expenses) { expense ->
+                items(searchedExpenses) { expense ->
                     val payer = members.find { it.id == expense.payerId }
                     ExpenseItemCard(
                         expense = expense,
@@ -1337,6 +1443,7 @@ fun SettlementItemCard(
 fun getCategoryStyling(category: String): Pair<ImageVector, Color> {
     return when (category) {
         "Food" -> Pair(Icons.Rounded.Restaurant, Color(0xFF10B981)) // Emerald
+        "Travel" -> Pair(Icons.Rounded.Flight, Color(0xFF06B6D4))    // Cyan
         "Rent" -> Pair(Icons.Rounded.Home, Color(0xFF3B82F6))       // Blue
         "Utilities" -> Pair(Icons.Rounded.Lightbulb, Color(0xFFF59E0B)) // Amber
         "Entertainment" -> Pair(Icons.Rounded.Movie, Color(0xFFEC4899)) // Pink
@@ -1478,7 +1585,7 @@ fun AddExpenseScreen(
             fontWeight = FontWeight.Bold,
             fontSize = 14.sp
         )
-        val categories = listOf("Food", "Rent", "Utilities", "Entertainment", "Shopping", "Other")
+        val categories = listOf("Food", "Travel", "Rent", "Utilities", "Entertainment", "Shopping", "Other")
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1907,15 +2014,18 @@ fun ReportsScreen(
     val activeGroup = remember(groups, selectedGroupId) { groups.find { it.id == selectedGroupId } }
     val balances by viewModel.memberBalances.collectAsStateWithLifecycle()
     var showPdfExportDialog by remember { mutableStateOf(false) }
+    var selectedCategoryFilter by remember { mutableStateOf("ALL") }
 
     val reportMonth by viewModel.reportMonth.collectAsStateWithLifecycle()
     val reportYear by viewModel.reportYear.collectAsStateWithLifecycle()
 
-    // Filter expenses matching selected month & year
-    val filteredExpenses = remember(expenses, reportMonth, reportYear) {
+    // Filter expenses matching selected month & year and category
+    val filteredExpenses = remember(expenses, reportMonth, reportYear, selectedCategoryFilter) {
         expenses.filter { expense ->
             val cal = Calendar.getInstance().apply { timeInMillis = expense.timestamp }
-            (cal.get(Calendar.MONTH) + 1) == reportMonth && cal.get(Calendar.YEAR) == reportYear
+            val matchesDate = (cal.get(Calendar.MONTH) + 1) == reportMonth && cal.get(Calendar.YEAR) == reportYear
+            val matchesCategory = selectedCategoryFilter == "ALL" || selectedCategoryFilter == expense.category
+            matchesDate && matchesCategory
         }
     }
 
@@ -2011,6 +2121,56 @@ fun ReportsScreen(
                     modifier = Modifier.testTag("next_month_btn")
                 ) {
                     Icon(imageVector = Icons.AutoMirrored.Rounded.ArrowForward, contentDescription = "Next")
+                }
+            }
+        }
+
+        // Category Filter Chips
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                text = Localization.getString("filter_category", isFarsi),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            val reportCategories = listOf("ALL", "Food", "Travel", "Rent", "Utilities", "Entertainment", "Shopping", "Other")
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                reportCategories.forEach { cat ->
+                    val isSel = selectedCategoryFilter == cat
+                    val label = if (cat == "ALL") (if (isFarsi) "همه" else "All") else Localization.getString("category_${cat.lowercase()}", isFarsi)
+                    val (icon, _) = if (cat == "ALL") Pair(Icons.Rounded.FilterList, Color.Gray) else getCategoryStyling(cat)
+                    Card(
+                        modifier = Modifier
+                            .clickable { selectedCategoryFilter = cat }
+                            .testTag("filter_cat_$cat"),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isSel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = if (isSel) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = label,
+                                fontSize = 12.sp,
+                                fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isSel) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -3317,7 +3477,11 @@ fun SettingsScreen(
     customCurrency: String?
 ) {
     val isDarkMode by viewModel.isDarkMode.collectAsStateWithLifecycle()
+    val enableDebtAlerts by viewModel.enableDebtAlerts.collectAsStateWithLifecycle()
     var currencyInput by remember { mutableStateOf(customCurrency ?: "") }
+    var showImportDialog by remember { mutableStateOf(false) }
+    var importJsonText by remember { mutableStateOf("") }
+    val context = LocalContext.current
     val scrollState = rememberScrollState()
 
     Column(
@@ -3543,6 +3707,120 @@ fun SettingsScreen(
             }
         }
 
+        // Debt & New Bill Alerts Switch
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Row(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                    Icon(
+                        imageVector = Icons.Rounded.NotificationsActive,
+                        contentDescription = "Alerts",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = Localization.getString("debt_alerts_setting", isFarsi),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                        Text(
+                            text = if (isFarsi) "ارسال اعلان هنگام ثبت هزینه جدید و یادآوری بدهی اعضا" else "Push notifications & local alerts for new expenses and pending debts",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+                Switch(
+                    checked = enableDebtAlerts,
+                    onCheckedChange = { viewModel.toggleDebtAlerts(it) },
+                    modifier = Modifier.testTag("settings_debt_alerts_switch")
+                )
+            }
+        }
+
+        // Backup & Restore Data Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Rounded.Backup,
+                        contentDescription = "Backup",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = Localization.getString("backup_restore", isFarsi),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                        Text(
+                            text = if (isFarsi) "ذخیره و پشتیبان‌گیری از کل اطلاعات برنامه به صورت فایل JSON و بازیابی آن" else "Export or restore all database records in JSON format",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            viewModel.exportDatabaseToJson { json ->
+                                if (json != null) {
+                                    val sendIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(android.content.Intent.EXTRA_TITLE, "SplitEase_Backup.json")
+                                        putExtra(android.content.Intent.EXTRA_TEXT, json)
+                                    }
+                                    val shareIntent = android.content.Intent.createChooser(sendIntent, if (isFarsi) "ارسال فایل پشتیبان" else "Share Backup JSON")
+                                    context.startActivity(shareIntent)
+                                } else {
+                                    android.widget.Toast.makeText(context, if (isFarsi) "خطا در پشتیبان‌گیری" else "Export failed", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                        modifier = Modifier.weight(1f).testTag("export_backup_btn"),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Icon(Icons.Rounded.Upload, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(text = Localization.getString("export_backup", isFarsi), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                    OutlinedButton(
+                        onClick = { showImportDialog = true },
+                        modifier = Modifier.weight(1f).testTag("import_backup_btn"),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(text = Localization.getString("import_backup", isFarsi), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
         // About / Offline Mode Info Card
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -3578,6 +3856,51 @@ fun SettingsScreen(
         }
 
         Spacer(modifier = Modifier.height(32.dp))
+    }
+
+    if (showImportDialog) {
+        AlertDialog(
+            onDismissRequest = { showImportDialog = false },
+            title = { Text(if (isFarsi) "بازیابی اطلاعات از بکاپ" else "Restore from JSON Backup", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = if (isFarsi) "متن فایل بکاپ (JSON) را در کادر زیر جای‌گذاری کنید:" else "Paste the backup JSON text below to restore your groups and expenses:",
+                        fontSize = 13.sp
+                    )
+                    OutlinedTextField(
+                        value = importJsonText,
+                        onValueChange = { importJsonText = it },
+                        modifier = Modifier.fillMaxWidth().height(150.dp).testTag("import_json_input"),
+                        shape = RoundedCornerShape(10.dp),
+                        placeholder = { Text("{\"groups\": [...], \"expenses\": [...]}") }
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (importJsonText.isNotBlank()) {
+                            viewModel.importDatabaseFromJson(importJsonText) { success, msg ->
+                                android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
+                                if (success) {
+                                    showImportDialog = false
+                                    importJsonText = ""
+                                }
+                            }
+                        }
+                    },
+                    modifier = Modifier.testTag("confirm_import_btn")
+                ) {
+                    Text(if (isFarsi) "بازیابی اطلاعات" else "Restore Now")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showImportDialog = false }) {
+                    Text(if (isFarsi) "انصراف" else "Cancel")
+                }
+            }
+        )
     }
 }
 
