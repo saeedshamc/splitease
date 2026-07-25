@@ -50,6 +50,7 @@ import com.example.ui.theme.Localization
 import com.example.ui.theme.ColorExpense
 import com.example.ui.theme.ColorIncome
 import com.example.ui.theme.ColorNeutral
+import com.example.ui.components.AuthDialog
 import com.example.ui.viewmodel.SettleTransaction
 import com.example.ui.viewmodel.SplitEaseViewModel
 import kotlinx.coroutines.launch
@@ -92,6 +93,8 @@ fun SplitEaseApp(viewModel: SplitEaseViewModel) {
     val groups by viewModel.groups.collectAsStateWithLifecycle()
     val selectedGroupId by viewModel.selectedGroupId.collectAsStateWithLifecycle()
     val members by viewModel.currentMembers.collectAsStateWithLifecycle()
+    val currentUser by viewModel.currentUser.collectAsStateWithLifecycle()
+    var showAuthDialog by remember { mutableStateOf(false) }
     
     val context = LocalContext.current
     val activeGroup = groups.find { it.id == selectedGroupId }
@@ -132,6 +135,16 @@ fun SplitEaseApp(viewModel: SplitEaseViewModel) {
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = { showAuthDialog = true },
+                        modifier = Modifier.testTag("account_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.AccountCircle,
+                            contentDescription = "User Account",
+                            tint = if (currentUser?.isOnlineAuth == true) Color(0xFF4CAF50) else MaterialTheme.colorScheme.primary
+                        )
+                    }
                     // Fast locale / theme quick-toggles in the bar
                     IconButton(
                         onClick = { viewModel.toggleLanguage() },
@@ -266,6 +279,13 @@ fun SplitEaseApp(viewModel: SplitEaseViewModel) {
                     )
                 }
             }
+            if (showAuthDialog) {
+                AuthDialog(
+                    viewModel = viewModel,
+                    isFarsi = isFarsi,
+                    onDismiss = { showAuthDialog = false }
+                )
+            }
         }
     }
 }
@@ -377,6 +397,40 @@ fun DashboardScreen(
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.primary
                         )
+                    }
+                }
+            }
+        }
+
+        if (activeGroup.groupType == "FAMILY_TRIP") {
+            item {
+                val totalExp = expenses.sumOf { it.amount }
+                val totalHc = members.sumOf { it.headcount.coerceAtLeast(1) }
+                val costPerPerson = if (totalHc > 0) totalExp / totalHc else 0.0
+
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(imageVector = Icons.Rounded.FamilyRestroom, contentDescription = "Family", tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(text = Localization.getString("trip_summary", isFarsi), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                        }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(text = Localization.getString("total_spending", isFarsi) + ":", fontSize = 13.sp)
+                            Text(text = Localization.formatCurrency(totalExp, isFarsi, customCurrency), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(text = Localization.getString("total_headcount", isFarsi) + ":", fontSize = 13.sp)
+                            Text(text = "${Localization.formatNumber(totalHc.toDouble(), isFarsi)} ${Localization.getString("headcount", isFarsi)}", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(text = Localization.getString("cost_per_person", isFarsi) + ":", fontSize = 13.sp)
+                            Text(text = Localization.formatCurrency(costPerPerson, isFarsi, customCurrency), fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
+                        }
                     }
                 }
             }
@@ -545,7 +599,7 @@ fun DashboardScreen(
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text(
-                                        text = Localization.getString("owes", isFarsi),
+                                        text = if (activeGroup.groupType == "FAMILY_TRIP") Localization.getString("settle_instruction", isFarsi) else Localization.getString("owes", isFarsi),
                                         fontSize = 12.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                                     )
@@ -1309,7 +1363,9 @@ fun AddExpenseScreen(
             fontWeight = FontWeight.Bold,
             fontSize = 14.sp
         )
-        val splitTypes = listOf("EQUAL", "PERCENTAGE", "CUSTOM")
+        val activeGroup = viewModel.groups.collectAsStateWithLifecycle().value.find { it.id == viewModel.selectedGroupId.collectAsStateWithLifecycle().value }
+        val isFamilyMode = activeGroup?.groupType == "FAMILY_TRIP"
+        val splitTypes = if (isFamilyMode) listOf("BY_HEADCOUNT", "EQUAL", "PERCENTAGE", "CUSTOM") else listOf("EQUAL", "BY_HEADCOUNT", "PERCENTAGE", "CUSTOM")
         SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
             splitTypes.forEachIndexed { index, type ->
                 SegmentedButton(
@@ -1321,11 +1377,14 @@ fun AddExpenseScreen(
                     Text(
                         text = when (type) {
                             "EQUAL" -> Localization.getString("equally", isFarsi)
+                            "BY_HEADCOUNT" -> Localization.getString("by_headcount", isFarsi)
                             "PERCENTAGE" -> Localization.getString("by_percentage", isFarsi)
                             else -> Localization.getString("by_exact_amount", isFarsi)
                         },
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -1351,6 +1410,26 @@ fun AddExpenseScreen(
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(vertical = 8.dp)
                     )
+                }
+                "BY_HEADCOUNT" -> {
+                    val totalHc = members.sumOf { it.headcount.coerceAtLeast(1) }
+                    val costPerPerson = if (totalHc > 0) parsedAmount / totalHc else if (members.isNotEmpty()) parsedAmount / members.size else 0.0
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(vertical = 4.dp)) {
+                        Text(
+                            text = "• ${Localization.getString("cost_per_person", isFarsi)}: " + Localization.formatCurrency(costPerPerson, isFarsi, customCurrency),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        members.forEach { m ->
+                            val hc = m.headcount.coerceAtLeast(1)
+                            val fairShare = costPerPerson * hc
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(text = "${m.name} ($hc ${Localization.getString("headcount", isFarsi)})", fontSize = 12.sp)
+                                Text(text = Localization.formatCurrency(fairShare, isFarsi, customCurrency), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
                 }
                 "PERCENTAGE" -> {
                     var totalPercent = 0.0
@@ -1530,6 +1609,16 @@ fun AddExpenseScreen(
                             customShares = customShares.toMap(),
                             isRecurring = isRecurring
                         )
+                        if (isRecurring) {
+                            viewModel.addRecurringSchedule(
+                                title = title,
+                                amount = amtVal,
+                                category = selectedCategory,
+                                payerId = selectedPayerId,
+                                splitType = splitType,
+                                frequency = "MONTHLY"
+                            )
+                        }
                     } else {
                         viewModel.updateExpense(
                             expenseId = editingExpense.id,
@@ -2040,7 +2129,9 @@ fun GroupsScreen(
     if (showCreateDialog) {
         var groupName by remember { mutableStateOf("") }
         var outingDate by remember { mutableStateOf<Long?>(null) }
+        var groupType by remember { mutableStateOf("STANDARD") }
         val memberList = remember { mutableStateListOf("", "", "") } // Initial 3 empty member fields
+        val memberHeadcounts = remember { mutableStateListOf(1, 1, 1) }
 
         Dialog(onDismissRequest = { showCreateDialog = false }) {
             Card(
@@ -2069,6 +2160,29 @@ fun GroupsScreen(
                         modifier = Modifier.fillMaxWidth().testTag("new_group_name_input"),
                         shape = RoundedCornerShape(12.dp)
                     )
+
+                    Text(
+                        text = Localization.getString("group_type", isFarsi),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilterChip(
+                            selected = groupType == "STANDARD",
+                            onClick = { groupType = "STANDARD" },
+                            label = { Text(Localization.getString("standard_group", isFarsi), fontSize = 11.sp) },
+                            modifier = Modifier.weight(1f)
+                        )
+                        FilterChip(
+                            selected = groupType == "FAMILY_TRIP",
+                            onClick = { groupType = "FAMILY_TRIP" },
+                            label = { Text(Localization.getString("family_trip_group", isFarsi), fontSize = 11.sp) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
 
                     Text(
                         text = Localization.getString("outing_date", isFarsi),
@@ -2132,18 +2246,48 @@ fun GroupsScreen(
                     )
 
                     memberList.forEachIndexed { index, mName ->
-                        OutlinedTextField(
-                            value = mName,
-                            onValueChange = { memberList[index] = it },
-                            label = { Text(text = "${Localization.getString("member_name", isFarsi)} ${Localization.formatNumber((index+1).toDouble(), isFarsi)}") },
-                            modifier = Modifier.fillMaxWidth().testTag("new_member_input_$index"),
-                            shape = RoundedCornerShape(10.dp)
-                        )
+                        if (groupType == "FAMILY_TRIP") {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                OutlinedTextField(
+                                    value = mName,
+                                    onValueChange = { memberList[index] = it },
+                                    label = { Text(text = "${Localization.getString("member_name", isFarsi)} ${Localization.formatNumber((index+1).toDouble(), isFarsi)}") },
+                                    modifier = Modifier.weight(1f).testTag("new_member_input_$index"),
+                                    shape = RoundedCornerShape(10.dp)
+                                )
+                                OutlinedTextField(
+                                    value = (memberHeadcounts.getOrNull(index) ?: 1).toString(),
+                                    onValueChange = { str ->
+                                        val hc = str.toIntOrNull()?.coerceAtLeast(1) ?: 1
+                                        if (index < memberHeadcounts.size) memberHeadcounts[index] = hc else memberHeadcounts.add(hc)
+                                    },
+                                    label = { Text(Localization.getString("headcount", isFarsi)) },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    modifier = Modifier.width(90.dp),
+                                    shape = RoundedCornerShape(10.dp)
+                                )
+                            }
+                        } else {
+                            OutlinedTextField(
+                                value = mName,
+                                onValueChange = { memberList[index] = it },
+                                label = { Text(text = "${Localization.getString("member_name", isFarsi)} ${Localization.formatNumber((index+1).toDouble(), isFarsi)}") },
+                                modifier = Modifier.fillMaxWidth().testTag("new_member_input_$index"),
+                                shape = RoundedCornerShape(10.dp)
+                            )
+                        }
                     }
 
                     // Add member button within list
                     TextButton(
-                        onClick = { memberList.add("") },
+                        onClick = {
+                            memberList.add("")
+                            memberHeadcounts.add(1)
+                        },
                         modifier = Modifier.align(Alignment.End)
                     ) {
                         Icon(imageVector = Icons.Rounded.Add, contentDescription = "Add Member")
@@ -2165,7 +2309,7 @@ fun GroupsScreen(
                         Button(
                             onClick = {
                                 if (groupName.isNotBlank()) {
-                                    viewModel.createGroup(groupName, memberList.toList(), outingDate)
+                                    viewModel.createGroup(groupName, memberList.toList(), outingDate, false, groupType, memberHeadcounts.toList())
                                     showCreateDialog = false
                                 }
                             },
@@ -2341,6 +2485,74 @@ fun SettingsScreen(
                         modifier = Modifier.testTag("save_currency_btn")
                     ) {
                         Text(text = Localization.getString("save", isFarsi), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        // Recurring Bills Manager
+        val schedules by viewModel.currentSchedules.collectAsStateWithLifecycle()
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Rounded.EventRepeat,
+                        contentDescription = "Recurring",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = Localization.getString("recurring_bills", isFarsi),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                        Text(
+                            text = "Automatic scheduled expenses for active group",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+
+                if (schedules.isEmpty()) {
+                    Text(
+                        text = Localization.getString("no_schedules", isFarsi),
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    )
+                } else {
+                    schedules.forEach { sch ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(10.dp))
+                                .padding(10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(text = sch.title, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                Text(
+                                    text = "${Localization.formatCurrency(sch.amount, isFarsi, customCurrency)} (${sch.frequency})",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            IconButton(onClick = { viewModel.deleteRecurringSchedule(sch) }) {
+                                Icon(imageVector = Icons.Rounded.Delete, contentDescription = "Delete Schedule", tint = ColorExpense)
+                            }
+                        }
                     }
                 }
             }

@@ -95,9 +95,39 @@ interface SettlementDao {
     suspend fun getSettlementsByGroupSync(groupId: Int): List<Settlement>
 }
 
+@Dao
+interface UserDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertUser(user: User): Long
+
+    @Query("SELECT * FROM users WHERE uid = :uid LIMIT 1")
+    suspend fun getUserById(uid: String): User?
+
+    @Query("SELECT * FROM users ORDER BY createdAt DESC")
+    fun getAllUsers(): Flow<List<User>>
+}
+
+@Dao
+interface RecurringScheduleDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSchedule(schedule: RecurringSchedule): Long
+
+    @Update
+    suspend fun updateSchedule(schedule: RecurringSchedule)
+
+    @Delete
+    suspend fun deleteSchedule(schedule: RecurringSchedule)
+
+    @Query("SELECT * FROM recurring_schedules WHERE groupId = :groupId AND isActive = 1")
+    fun getActiveSchedulesByGroup(groupId: Int): Flow<List<RecurringSchedule>>
+
+    @Query("SELECT * FROM recurring_schedules WHERE isActive = 1")
+    suspend fun getAllActiveSchedulesSync(): List<RecurringSchedule>
+}
+
 @Database(
-    entities = [Group::class, Member::class, Expense::class, ExpenseSplit::class, Settlement::class],
-    version = 2,
+    entities = [Group::class, Member::class, Expense::class, ExpenseSplit::class, Settlement::class, User::class, RecurringSchedule::class],
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -105,4 +135,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun memberDao(): MemberDao
     abstract fun expenseDao(): ExpenseDao
     abstract fun settlementDao(): SettlementDao
+    abstract fun userDao(): UserDao
+    abstract fun recurringScheduleDao(): RecurringScheduleDao
 }

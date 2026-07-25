@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.auth.AuthManager
 import com.example.data.database.AppDatabase
 import com.example.data.model.*
 import com.example.data.repository.ExpenseRepository
@@ -27,6 +28,9 @@ class SplitEaseViewModel(application: Application) : AndroidViewModel(applicatio
     ).fallbackToDestructiveMigration().build()
     
     val repository = ExpenseRepository(db)
+    
+    val authManager = AuthManager(application)
+    val currentUser: StateFlow<User?> = authManager.currentUser
 
     // Language & Theme State
     private val _isFarsi = MutableStateFlow(sharedPrefs.getBoolean("isFarsi", false))
@@ -76,6 +80,13 @@ class SplitEaseViewModel(application: Application) : AndroidViewModel(applicatio
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // Current Group Recurring Schedules
+    val currentSchedules: StateFlow<List<RecurringSchedule>> = selectedGroupId
+        .flatMapLatest { id ->
+            if (id != -1) repository.getActiveSchedulesForGroup(id) else flowOf(emptyList())
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     // Month & Year Filter for Reports
     private val calendar = Calendar.getInstance().apply {
         // Default to July 2026 as per local metadata time, or current device month
@@ -102,6 +113,7 @@ class SplitEaseViewModel(application: Application) : AndroidViewModel(applicatio
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     init {
+        viewModelScope.launch { processRecurringSchedules() }
         // Create initial default group if none exists after small delay or instantly, but only on first run
         viewModelScope.launch {
             groups.collect { groupList ->
@@ -258,16 +270,25 @@ class SplitEaseViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     // Actions
-    fun createGroup(name: String, memberNames: List<String>, outingDate: Long? = null, isFinished: Boolean = false) {
+    fun createGroup(
+        name: String, 
+        memberNames: List<String>, 
+        outingDate: Long? = null, 
+        isFinished: Boolean = false,
+        groupType: String = "STANDARD",
+        memberHeadcounts: List<Int> = emptyList()
+    ) {
         viewModelScope.launch {
             val colors = listOf("#FF6B6B", "#4DABF7", "#51CF66", "#FCC419", "#AE3EC9", "#15AABF", "#F76707", "#74B816")
-            val groupId = repository.insertGroup(Group(name = name, outingDate = outingDate, isFinished = isFinished)).toInt()
+            val groupId = repository.insertGroup(Group(name = name, outingDate = outingDate, isFinished = isFinished, groupType = groupType)).toInt()
             memberNames.forEachIndexed { index, memberName ->
                 if (memberName.isNotBlank()) {
+                    val hc = memberHeadcounts.getOrNull(index)?.coerceAtLeast(1) ?: 1
                     repository.insertMember(
                         groupId = groupId,
                         name = memberName.trim(),
-                        avatarColor = colors[index % colors.size]
+                        avatarColor = colors[index % colors.size],
+                        headcount = hc
                     )
                 }
             }
@@ -288,11 +309,11 @@ class SplitEaseViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun addMember(name: String, color: String) {
+    fun addMember(name: String, color: String, headcount: Int = 1, userId: String? = null) {
         val gId = _selectedGroupId.value
         if (gId == -1) return
         viewModelScope.launch {
-            repository.insertMember(gId, name, color)
+            repository.insertMember(gId, name, color, headcount, userId)
         }
     }
 
@@ -356,6 +377,14 @@ class SplitEaseViewModel(application: Application) : AndroidViewModel(applicatio
                         splits.add(ExpenseSplit(expenseId = 0, memberId = member.id, amount = portion))
                     }
                 }
+                "BY_HEADCOUNT" -> {
+                    val totalHeadcount = membersList.sumOf { it.headcount.coerceAtLeast(1) }
+                    val costPerPerson = if (totalHeadcount > 0) amount / totalHeadcount else if (membersList.isNotEmpty()) amount / membersList.size else 0.0
+                    membersList.forEach { member ->
+                        val portion = costPerPerson * member.headcount.coerceAtLeast(1)
+                        splits.add(ExpenseSplit(expenseId = 0, memberId = member.id, amount = portion))
+                    }
+                }
             }
 
             repository.insertExpense(expense, splits)
@@ -416,6 +445,14 @@ class SplitEaseViewModel(application: Application) : AndroidViewModel(applicatio
                 "CUSTOM" -> {
                     membersList.forEach { member ->
                         val portion = customShares[member.id] ?: 0.0
+                        splits.add(ExpenseSplit(expenseId = expenseId, memberId = member.id, amount = portion))
+                    }
+                }
+                "BY_HEADCOUNT" -> {
+                    val totalHeadcount = membersList.sumOf { it.headcount.coerceAtLeast(1) }
+                    val costPerPerson = if (totalHeadcount > 0) amount / totalHeadcount else if (membersList.isNotEmpty()) amount / membersList.size else 0.0
+                    membersList.forEach { member ->
+                        val portion = costPerPerson * member.headcount.coerceAtLeast(1)
                         splits.add(ExpenseSplit(expenseId = expenseId, memberId = member.id, amount = portion))
                     }
                 }
@@ -494,4 +531,85 @@ class SplitEaseViewModel(application: Application) : AndroidViewModel(applicatio
         _customCurrency.value = currency
         sharedPrefs.edit().putString("customCurrency", currency).apply()
     }
+
+    private suspend fun processRecurringSchedules() {
+        try {
+            val now = System.currentTimeMillis()
+            val schedules = repository.getAllActiveSchedulesSync()
+            schedules.forEach { schedule ->
+                if (schedule.nextDueDate <= now && schedule.isActive) {
+                    val membersList = repository.getMembersForGroupSync(schedule.groupId)
+                    if (membersList.isNotEmpty()) {
+                        val splits = mutableListOf<ExpenseSplit>()
+                        val portion = schedule.amount / membersList.size
+                        membersList.forEach { member ->
+                            splits.add(ExpenseSplit(expenseId = 0, memberId = member.id, amount = portion))
+                        }
+                        val expense = Expense(
+                            groupId = schedule.groupId,
+                            title = schedule.title,
+                            amount = schedule.amount,
+                            category = schedule.category,
+                            payerId = schedule.payerId,
+                            splitType = schedule.splitType,
+                            timestamp = now,
+                            isRecurring = true,
+                            dueDate = now + 86400000L * 30L
+                        )
+                        repository.insertExpense(expense, splits)
+                        repository.updateSchedule(schedule.copy(nextDueDate = now + 86400000L * 30L))
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    fun addRecurringSchedule(title: String, amount: Double, category: String, payerId: Int, splitType: String = "EQUAL", frequency: String = "MONTHLY") {
+        val gId = _selectedGroupId.value
+        if (gId == -1) return
+        viewModelScope.launch {
+            val interval = when (frequency) {
+                "WEEKLY" -> 86400000L * 7L
+                "YEARLY" -> 86400000L * 365L
+                else -> 86400000L * 30L
+            }
+            val schedule = RecurringSchedule(
+                groupId = gId,
+                title = title.trim(),
+                amount = amount,
+                category = category,
+                payerId = payerId,
+                splitType = splitType,
+                frequency = frequency,
+                nextDueDate = System.currentTimeMillis() + interval,
+                isActive = true
+            )
+            repository.insertSchedule(schedule)
+        }
+    }
+
+    fun deleteRecurringSchedule(schedule: RecurringSchedule) {
+        viewModelScope.launch { repository.deleteSchedule(schedule) }
+    }
+
+    fun signUpAuth(email: String, pass: String, name: String, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            val res = authManager.signUp(email, pass, name)
+            if (res.isSuccess) onResult(true, "ثبت نام موفقیت‌آمیز بود / Signed up successfully")
+            else onResult(false, res.exceptionOrNull()?.message ?: "Sign up failed")
+        }
+    }
+
+    fun loginAuth(email: String, pass: String, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            val res = authManager.login(email, pass)
+            if (res.isSuccess) onResult(true, "ورود موفقیت‌آمیز بود / Logged in successfully")
+            else onResult(false, res.exceptionOrNull()?.message ?: "Login failed")
+        }
+    }
+
+    fun loginGuestAuth(name: String) = authManager.loginAsGuest(name)
+    fun logoutAuth() = authManager.logout()
 }

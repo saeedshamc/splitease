@@ -29,8 +29,12 @@ class ExpenseRepository(private val db: AppDatabase) {
 
     suspend fun getMembersForGroupSync(groupId: Int): List<Member> = db.memberDao().getMembersByGroupSync(groupId)
 
-    suspend fun insertMember(groupId: Int, name: String, avatarColor: String): Long {
-        return db.memberDao().insertMember(Member(groupId = groupId, name = name, avatarColor = avatarColor))
+    suspend fun insertMember(groupId: Int, name: String, avatarColor: String, headcount: Int = 1, userId: String? = null): Long {
+        return db.memberDao().insertMember(Member(groupId = groupId, name = name, avatarColor = avatarColor, headcount = headcount, userId = userId))
+    }
+
+    suspend fun insertMember(member: Member): Long {
+        return db.memberDao().insertMember(member)
     }
 
     suspend fun insertMembers(members: List<Member>) {
@@ -40,6 +44,18 @@ class ExpenseRepository(private val db: AppDatabase) {
     suspend fun deleteMember(member: Member) {
         db.memberDao().deleteMember(member)
     }
+
+    // User Operations
+    val allUsers: Flow<List<User>> = db.userDao().getAllUsers()
+    suspend fun insertUser(user: User): Long = db.userDao().insertUser(user)
+    suspend fun getUserById(uid: String): User? = db.userDao().getUserById(uid)
+
+    // Recurring Schedule Operations
+    fun getActiveSchedulesForGroup(groupId: Int): Flow<List<RecurringSchedule>> = db.recurringScheduleDao().getActiveSchedulesByGroup(groupId)
+    suspend fun insertSchedule(schedule: RecurringSchedule): Long = db.recurringScheduleDao().insertSchedule(schedule)
+    suspend fun updateSchedule(schedule: RecurringSchedule) = db.recurringScheduleDao().updateSchedule(schedule)
+    suspend fun deleteSchedule(schedule: RecurringSchedule) = db.recurringScheduleDao().deleteSchedule(schedule)
+    suspend fun getAllActiveSchedulesSync(): List<RecurringSchedule> = db.recurringScheduleDao().getAllActiveSchedulesSync()
 
     fun getExpensesForGroup(groupId: Int): Flow<List<Expense>> = db.expenseDao().getExpensesByGroup(groupId)
 
