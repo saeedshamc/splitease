@@ -383,7 +383,7 @@ fun DashboardScreen(
             }
         }
 
-        if (activeGroup.groupType == "FAMILY_TRIP") {
+        if (activeGroup.groupType == "FAMILY_TRIP" || activeGroup.groupType == "MULTI_GROUP_TRIP") {
             item {
                 val totalExp = expenses.sumOf { it.amount }
                 val totalHc = members.sumOf { it.headcount.coerceAtLeast(1) }
@@ -394,11 +394,16 @@ fun DashboardScreen(
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(imageVector = Icons.Rounded.FamilyRestroom, contentDescription = "Family", tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                            Icon(imageVector = if (activeGroup.groupType == "MULTI_GROUP_TRIP") Icons.Rounded.Groups else Icons.Rounded.FamilyRestroom, contentDescription = "Summary", tint = MaterialTheme.colorScheme.onSecondaryContainer)
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text(text = Localization.getString("trip_summary", isFarsi), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                            Text(
+                                text = if (activeGroup.groupType == "MULTI_GROUP_TRIP") Localization.getString("group_cost_breakdown", isFarsi) else Localization.getString("trip_summary", isFarsi),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
                         }
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text(text = Localization.getString("total_spending", isFarsi) + ":", fontSize = 13.sp)
@@ -406,11 +411,84 @@ fun DashboardScreen(
                         }
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text(text = Localization.getString("total_headcount", isFarsi) + ":", fontSize = 13.sp)
-                            Text(text = "${Localization.formatNumber(totalHc.toDouble(), isFarsi)} ${Localization.getString("headcount", isFarsi)}", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text(text = "${Localization.formatNumber(totalHc.toDouble(), isFarsi)} ${if (isFarsi) "نفر" else "people"}", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         }
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text(text = Localization.getString("cost_per_person", isFarsi) + ":", fontSize = 13.sp)
-                            Text(text = Localization.formatCurrency(costPerPerson, isFarsi, customCurrency), fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
+                            Text(text = Localization.formatCurrency(costPerPerson, isFarsi, customCurrency), fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.primary)
+                        }
+
+                        if (activeGroup.groupType == "MULTI_GROUP_TRIP" && members.isNotEmpty()) {
+                            Box(modifier = Modifier.padding(vertical = 4.dp).fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.2f)))
+                            Text(
+                                text = if (isFarsi) "تفکیک سهم و هزینه هر گروه (سرانه و جمع کل):" else "Group Breakdown (Per-Person & Total):",
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+
+                            members.forEach { m ->
+                                val grpId = m.userId?.removePrefix("GROUP_")?.toIntOrNull()
+                                val masterPayer = remember(allMembersList, grpId) { if (grpId != null) allMembersList.filter { it.groupId == grpId }.firstOrNull()?.name else null }
+                                val groupShare = costPerPerson * m.headcount.coerceAtLeast(1)
+                                val paidByGroup = expenses.filter { it.payerId == m.id }.sumOf { it.amount }
+                                val netBalance = balances[m.id] ?: 0.0
+
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)),
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = m.name + if (masterPayer != null) " (👑 ${Localization.getString("master_payer", isFarsi)}: $masterPayer)" else "",
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 13.sp,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                            Text(
+                                                text = "${m.headcount} ${if (isFarsi) "نفر" else "people"}",
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                            Text(text = Localization.getString("per_person_share", isFarsi) + ":", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Text(text = Localization.formatCurrency(costPerPerson, isFarsi, customCurrency), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                        }
+                                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                            Text(text = Localization.getString("group_total_share", isFarsi) + ":", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Text(text = Localization.formatCurrency(groupShare, isFarsi, customCurrency), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                            Text(text = Localization.getString("family_paid", isFarsi) + ":", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Text(text = Localization.formatCurrency(paidByGroup, isFarsi, customCurrency), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF10B981))
+                                        }
+                                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                            Text(text = Localization.getString("net_status", isFarsi) + ":", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            val balTxt = if (kotlin.math.abs(netBalance) < 1.0) {
+                                                Localization.getString("settled", isFarsi)
+                                            } else if (netBalance > 0) {
+                                                (if (isFarsi) "بستانکار / دریافت: +" else "Receives: +") + Localization.formatCurrency(netBalance, isFarsi, customCurrency)
+                                            } else {
+                                                (if (isFarsi) "بدهکار / پرداخت: -" else "Pays: -") + Localization.formatCurrency(kotlin.math.abs(netBalance), isFarsi, customCurrency)
+                                            }
+                                            Text(
+                                                text = balTxt,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = if (netBalance > 0) Color(0xFF10B981) else if (netBalance < -1.0) Color(0xFFEF4444) else MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -2179,8 +2257,11 @@ fun GroupsScreen(
                                                     "${m.name} (${m.headcount} نفر$spentTxt)"
                                                 }
                                             }
-                                            "FAMILY_TRIP" -> groupMembers.joinToString("، ") { "${it.name} (${it.headcount} نفر)" }
-                                            else -> groupMembers.joinToString("، ") { it.name }
+                                            else -> {
+                                                val master = groupMembers.firstOrNull()?.name
+                                                val masterTxt = if (master != null) "👑 ${Localization.getString("master_payer", isFarsi)}: $master • " else ""
+                                                masterTxt + groupMembers.joinToString("، ") { it.name }
+                                            }
                                         }
                                         val labelPrefix = if (group.groupType == "MULTI_GROUP_TRIP") {
                                             if (isFarsi) "گروه‌های شرکت‌کننده: " else "Participating Groups: "
@@ -2374,41 +2455,35 @@ fun GroupsScreen(
                         fontSize = 13.sp
                     )
 
-                    memberList.forEachIndexed { index, mName ->
-                        if (groupType == "FAMILY_TRIP") {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                OutlinedTextField(
-                                    value = mName,
-                                    onValueChange = { memberList[index] = it },
-                                    label = { Text(text = "${Localization.getString("member_name", isFarsi)} ${Localization.formatNumber((index+1).toDouble(), isFarsi)}") },
-                                    modifier = Modifier.weight(1f).testTag("new_member_input_$index"),
-                                    shape = RoundedCornerShape(10.dp)
-                                )
-                                OutlinedTextField(
-                                    value = (memberHeadcounts.getOrNull(index) ?: 1).toString(),
-                                    onValueChange = { str ->
-                                        val hc = str.toIntOrNull()?.coerceAtLeast(1) ?: 1
-                                        if (index < memberHeadcounts.size) memberHeadcounts[index] = hc else memberHeadcounts.add(hc)
-                                    },
-                                    label = { Text(Localization.getString("headcount", isFarsi)) },
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                    modifier = Modifier.width(90.dp),
-                                    shape = RoundedCornerShape(10.dp)
-                                )
-                            }
-                        } else {
-                            OutlinedTextField(
-                                value = mName,
-                                onValueChange = { memberList[index] = it },
-                                label = { Text(text = "${Localization.getString("member_name", isFarsi)} ${Localization.formatNumber((index+1).toDouble(), isFarsi)}") },
-                                modifier = Modifier.fillMaxWidth().testTag("new_member_input_$index"),
-                                shape = RoundedCornerShape(10.dp)
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(text = "👑", fontSize = 16.sp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = Localization.getString("master_payer_hint", isFarsi),
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         }
+                    }
+
+                    memberList.forEachIndexed { index, mName ->
+                        val labelTxt = if (index == 0) {
+                            "${Localization.getString("member_name", isFarsi)} ۱ (👑 ${Localization.getString("master_payer", isFarsi)})"
+                        } else {
+                            "${Localization.getString("member_name", isFarsi)} ${Localization.formatNumber((index+1).toDouble(), isFarsi)}"
+                        }
+                        OutlinedTextField(
+                            value = mName,
+                            onValueChange = { memberList[index] = it },
+                            label = { Text(text = labelTxt) },
+                            modifier = Modifier.fillMaxWidth().testTag("new_member_input_$index"),
+                            shape = RoundedCornerShape(10.dp)
+                        )
                     }
 
                     // Add member button within list
@@ -2438,7 +2513,7 @@ fun GroupsScreen(
                         Button(
                             onClick = {
                                 if (groupName.isNotBlank()) {
-                                    viewModel.createGroup(groupName, memberList.toList(), outingDate, false, groupType, memberHeadcounts.toList())
+                                    viewModel.createGroup(groupName, memberList.toList(), outingDate, false, groupType, emptyList())
                                     showCreateDialog = false
                                 }
                             },
@@ -2587,8 +2662,9 @@ fun GroupsScreen(
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Column {
+                                        val masterPayer = grpMembers.firstOrNull()?.name
                                         Text(
-                                            text = grp.name,
+                                            text = grp.name + if (masterPayer != null) " (👑 ${Localization.getString("master_payer", isFarsi)}: $masterPayer)" else "",
                                             fontWeight = FontWeight.Bold,
                                             fontSize = 14.sp
                                         )
@@ -2688,14 +2764,16 @@ fun GroupsScreen(
                                 availableToAdd.forEach { addGrp ->
                                     val addMems = remember(allMembersList, addGrp.id) { allMembersList.filter { it.groupId == addGrp.id } }
                                     val totalHc = addMems.sumOf { it.headcount.coerceAtLeast(1) }.coerceAtLeast(1)
+                                    val masterPayer = addMems.firstOrNull()?.name
+                                    val dispName = if (masterPayer != null) "${addGrp.name} (👑 $masterPayer)" else addGrp.name
                                     FilterChip(
                                         selected = false,
                                         onClick = {
                                             val colors = listOf("#FF6B6B", "#4DABF7", "#51CF66", "#FCC419", "#FF922B", "#CC5DE8", "#20C997")
-                                            viewModel.addMember(addGrp.name, colors.random(), totalHc, userId = "GROUP_${addGrp.id}", targetGroupId = grp.id)
+                                            viewModel.addMember(dispName, colors.random(), totalHc, userId = "GROUP_${addGrp.id}", targetGroupId = grp.id)
                                             selectedGroupForAddMember = null
                                         },
-                                        label = { Text("${addGrp.name} ($totalHc نفر)", fontSize = 11.sp) }
+                                        label = { Text("$dispName ($totalHc نفر)", fontSize = 11.sp) }
                                     )
                                 }
                             }

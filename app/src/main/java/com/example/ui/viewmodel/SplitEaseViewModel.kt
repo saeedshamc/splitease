@@ -319,9 +319,11 @@ class SplitEaseViewModel(application: Application) : AndroidViewModel(applicatio
                 if (grp != null) {
                     val grpMembers = allMems.filter { it.groupId == grpId }
                     val totalHc = grpMembers.sumOf { it.headcount.coerceAtLeast(1) }.coerceAtLeast(1)
+                    val masterPayer = grpMembers.firstOrNull()?.name
+                    val dispName = if (masterPayer != null) "${grp.name} (👑 $masterPayer)" else grp.name
                     repository.insertMember(
                         groupId = tripId,
-                        name = grp.name,
+                        name = dispName,
                         avatarColor = colors[index % colors.size],
                         headcount = totalHc,
                         userId = "GROUP_${grpId}"

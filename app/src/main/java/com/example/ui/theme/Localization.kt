@@ -121,7 +121,13 @@ object Localization {
         "create_trip_party" to "Create Trip / Party",
         "no_trips_yet" to "No multi-group trips or parties yet. Create one above!",
         "participating_groups" to "Participating Groups:",
-        "group_members_list" to "Members:"
+        "group_members_list" to "Members:",
+        "master_payer" to "Master Payer / Mgr",
+        "master_payer_hint" to "💡 First member is designated as the Master Payer / Manager for this group.",
+        "group_total_share" to "Group Total Share",
+        "per_person_share" to "Per-Person Share",
+        "group_cost_breakdown" to "Group & Per-Person Cost Breakdown",
+        "net_status" to "Net Status"
     )
 
     private val fa = mapOf(
@@ -244,7 +250,13 @@ object Localization {
         "create_trip_party" to "ایجاد سفر / مهمانی جدید",
         "no_trips_yet" to "هنوز سفر یا مهمانی ثبت نشده است. از دکمه بالا بسازید!",
         "participating_groups" to "گروه‌های شرکت‌کننده:",
-        "group_members_list" to "اعضای گروه:"
+        "group_members_list" to "اعضای گروه:",
+        "master_payer" to "مادر خرج / مسئول",
+        "master_payer_hint" to "💡 عضو اول به عنوان «مادر خرج و مسئول هزینه‌ها» برای این گروه تعیین می‌شود.",
+        "group_total_share" to "سهم کل گروه",
+        "per_person_share" to "سرانه هر نفر",
+        "group_cost_breakdown" to "محاسبه هزینه گروه‌ها و سرانه نفرات",
+        "net_status" to "وضعیت نهایی"
     )
 
     fun getString(key: String, isFarsi: Boolean): String {
