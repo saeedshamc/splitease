@@ -113,7 +113,15 @@ object Localization {
         "cost_per_person" to "Net Cost Per Person",
         "family_share" to "Fair Share",
         "family_paid" to "Total Paid",
-        "settle_instruction" to "must pay"
+        "settle_instruction" to "must pay",
+        "multi_group_trip" to "Multi-Group Trip / Event",
+        "trips_and_parties" to "Trips & Parties 🏝️",
+        "groups_and_families" to "Groups & Families 👥",
+        "select_participating_groups" to "Select Participating Groups:",
+        "create_trip_party" to "Create Trip / Party",
+        "no_trips_yet" to "No multi-group trips or parties yet. Create one above!",
+        "participating_groups" to "Participating Groups:",
+        "group_members_list" to "Members:"
     )
 
     private val fa = mapOf(
@@ -228,7 +236,15 @@ object Localization {
         "cost_per_person" to "هزینه خالص هر نفر",
         "family_share" to "سهم منصفانه خانواده",
         "family_paid" to "پرداختی کل گروه",
-        "settle_instruction" to "باید پرداخت کند به"
+        "settle_instruction" to "باید پرداخت کند به",
+        "multi_group_trip" to "سفر / مهمانی چند‌گروهی (انتخاب از گروه‌ها)",
+        "trips_and_parties" to "سفرها و مهمانی‌ها 🏝️",
+        "groups_and_families" to "گروه‌ها و خانواده‌ها 👥",
+        "select_participating_groups" to "انتخاب گروه‌های شرکت‌کننده در سفر/مهمانی:",
+        "create_trip_party" to "ایجاد سفر / مهمانی جدید",
+        "no_trips_yet" to "هنوز سفر یا مهمانی ثبت نشده است. از دکمه بالا بسازید!",
+        "participating_groups" to "گروه‌های شرکت‌کننده:",
+        "group_members_list" to "اعضای گروه:"
     )
 
     fun getString(key: String, isFarsi: Boolean): String {

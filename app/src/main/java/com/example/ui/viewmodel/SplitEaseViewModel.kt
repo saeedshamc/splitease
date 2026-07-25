@@ -302,6 +302,36 @@ class SplitEaseViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    fun createMultiGroupTrip(
+        tripName: String,
+        selectedGroupIds: List<Int>,
+        outingDate: Long? = null
+    ) {
+        viewModelScope.launch {
+            val colors = listOf("#FF6B6B", "#4DABF7", "#51CF66", "#FCC419", "#AE3EC9", "#15AABF", "#F76707", "#74B816")
+            val tripId = repository.insertGroup(Group(name = tripName, outingDate = outingDate, isFinished = false, groupType = "MULTI_GROUP_TRIP")).toInt()
+            
+            val allMems = allMembers.value
+            val allGrps = groups.value
+            
+            selectedGroupIds.forEachIndexed { index, grpId ->
+                val grp = allGrps.find { it.id == grpId }
+                if (grp != null) {
+                    val grpMembers = allMems.filter { it.groupId == grpId }
+                    val totalHc = grpMembers.sumOf { it.headcount.coerceAtLeast(1) }.coerceAtLeast(1)
+                    repository.insertMember(
+                        groupId = tripId,
+                        name = grp.name,
+                        avatarColor = colors[index % colors.size],
+                        headcount = totalHc,
+                        userId = "GROUP_${grpId}"
+                    )
+                }
+            }
+            selectGroup(tripId)
+        }
+    }
+
     fun updateGroupDetails(group: Group, name: String, outingDate: Long?, isFinished: Boolean) {
         viewModelScope.launch {
             repository.updateGroup(group.copy(name = name, outingDate = outingDate, isFinished = isFinished))

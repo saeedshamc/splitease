@@ -285,6 +285,7 @@ fun DashboardScreen(
     val settlements by viewModel.currentSettlements.collectAsStateWithLifecycle()
     val smartTx by viewModel.smartTransactions.collectAsStateWithLifecycle()
     val balances by viewModel.memberBalances.collectAsStateWithLifecycle()
+    val allMembersList by viewModel.allMembers.collectAsStateWithLifecycle()
     
     var showSettleDialog by remember { mutableStateOf<SettleTransaction?>(null) }
     var activeHistoryView by remember { mutableStateOf(false) } // toggle between settlements & expenses in activity history
@@ -579,7 +580,7 @@ fun DashboardScreen(
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text(
-                                        text = if (activeGroup.groupType == "FAMILY_TRIP") Localization.getString("settle_instruction", isFarsi) else Localization.getString("owes", isFarsi),
+                                        text = if (activeGroup.groupType == "FAMILY_TRIP" || activeGroup.groupType == "MULTI_GROUP_TRIP") Localization.getString("settle_instruction", isFarsi) else Localization.getString("owes", isFarsi),
                                         fontSize = 12.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                                     )
@@ -597,6 +598,29 @@ fun DashboardScreen(
                                     color = Color(0xFFEF4444),
                                     fontSize = 15.sp
                                 )
+
+                                val debtorGrpId = tx.debtor.userId?.removePrefix("GROUP_")?.toIntOrNull()
+                                val creditorGrpId = tx.creditor.userId?.removePrefix("GROUP_")?.toIntOrNull()
+                                if (debtorGrpId != null || creditorGrpId != null) {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    val debtorMems = remember(allMembersList, debtorGrpId) { if (debtorGrpId != null) allMembersList.filter { it.groupId == debtorGrpId } else emptyList() }
+                                    val creditorMems = remember(allMembersList, creditorGrpId) { if (creditorGrpId != null) allMembersList.filter { it.groupId == creditorGrpId } else emptyList() }
+                                    
+                                    if (debtorMems.isNotEmpty()) {
+                                        Text(
+                                            text = (if (isFarsi) "👤 اعضای ${tx.debtor.name}: " else "👤 ${tx.debtor.name}: ") + debtorMems.joinToString("، ") { it.name },
+                                            fontSize = 11.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    if (creditorMems.isNotEmpty()) {
+                                        Text(
+                                            text = (if (isFarsi) "👤 اعضای ${tx.creditor.name}: " else "👤 ${tx.creditor.name}: ") + creditorMems.joinToString("، ") { it.name },
+                                            fontSize = 11.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
                             }
                         }
 
@@ -1905,12 +1929,18 @@ fun GroupsScreen(
     val allExpensesList by viewModel.allExpenses.collectAsStateWithLifecycle()
 
     var showCreateDialog by remember { mutableStateOf(false) }
+    var showCreateTripDialog by remember { mutableStateOf(false) }
     var showArchived by remember { mutableStateOf(false) }
+    var isTripsTab by remember { mutableStateOf(true) }
     var selectedGroupForAddMember by remember { mutableStateOf<Group?>(null) }
 
-    // Separate active vs archived groups
-    val activeGroupsList = remember(groups) { groups.filter { !it.isFinished } }
-    val archivedGroupsList = remember(groups) { groups.filter { it.isFinished } }
+    // Filter groups based on active main tab (Trips vs Groups)
+    val tabGroups = remember(groups, isTripsTab) {
+        if (isTripsTab) groups.filter { it.groupType == "MULTI_GROUP_TRIP" }
+        else groups.filter { it.groupType != "MULTI_GROUP_TRIP" }
+    }
+    val activeGroupsList = remember(tabGroups) { tabGroups.filter { !it.isFinished } }
+    val archivedGroupsList = remember(tabGroups) { tabGroups.filter { it.isFinished } }
 
     Column(
         modifier = Modifier
@@ -1918,24 +1948,64 @@ fun GroupsScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // Segmented Main Tabs: Trips & Parties vs Groups & Families
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            val mainTabs = listOf(
+                true to Localization.getString("trips_and_parties", isFarsi),
+                false to Localization.getString("groups_and_families", isFarsi)
+            )
+            mainTabs.forEach { (isTrips, label) ->
+                val selected = isTripsTab == isTrips
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(
+                            if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                        )
+                        .border(
+                            width = if (selected) 2.dp else 1.dp,
+                            color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                            shape = RoundedCornerShape(14.dp)
+                        )
+                        .clickable { isTripsTab = isTrips }
+                        .padding(vertical = 12.dp, horizontal = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = label,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = Localization.getString("groups", isFarsi),
+                text = if (isTripsTab) Localization.getString("trips_and_parties", isFarsi) else Localization.getString("groups", isFarsi),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
             Button(
-                onClick = { showCreateDialog = true },
+                onClick = { if (isTripsTab) showCreateTripDialog = true else showCreateDialog = true },
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.testTag("create_new_group_btn")
             ) {
                 Icon(imageVector = Icons.Rounded.Add, contentDescription = "Add")
                 Spacer(modifier = Modifier.width(4.dp))
-                Text(text = Localization.getString("create_group", isFarsi), fontSize = 12.sp)
+                Text(
+                    text = if (isTripsTab) Localization.getString("create_trip_party", isFarsi) else Localization.getString("create_group", isFarsi),
+                    fontSize = 12.sp
+                )
             }
         }
 
@@ -1975,7 +2045,7 @@ fun GroupsScreen(
 
         if (displayedGroups.isEmpty()) {
             EmptyStateView(
-                title = Localization.getString(if (showArchived) "no_settlements_yet" else "no_groups_yet", isFarsi),
+                title = if (isTripsTab && !showArchived) Localization.getString("no_trips_yet", isFarsi) else Localization.getString(if (showArchived) "no_settlements_yet" else "no_groups_yet", isFarsi),
                 isFarsi = isFarsi
             )
         } else {
@@ -2076,11 +2146,15 @@ fun GroupsScreen(
                                             )
                                         }
 
-                                        val typeBadgeColor = if (group.groupType == "FAMILY_TRIP") Color(0xFFE91E63) else Color(0xFF2196F3)
-                                        val typeText = if (group.groupType == "FAMILY_TRIP") {
-                                            if (isFarsi) "خانوادگی ($totalHeadcount نفر)" else "Family ($totalHeadcount hc)"
-                                        } else {
-                                            if (isFarsi) "انفرادی/دوستانه (${groupMembers.size} نفر)" else "Standard (${groupMembers.size} m)"
+                                        val typeBadgeColor = when (group.groupType) {
+                                            "MULTI_GROUP_TRIP" -> Color(0xFF9C27B0)
+                                            "FAMILY_TRIP" -> Color(0xFFE91E63)
+                                            else -> Color(0xFF2196F3)
+                                        }
+                                        val typeText = when (group.groupType) {
+                                            "MULTI_GROUP_TRIP" -> if (isFarsi) "سفر چند‌گروهی ($totalHeadcount نفر)" else "Multi-Group ($totalHeadcount hc)"
+                                            "FAMILY_TRIP" -> if (isFarsi) "خانوادگی ($totalHeadcount نفر)" else "Family ($totalHeadcount hc)"
+                                            else -> if (isFarsi) "انفرادی/دوستانه (${groupMembers.size} نفر)" else "Standard (${groupMembers.size} m)"
                                         }
                                         Box(
                                             modifier = Modifier
@@ -2097,13 +2171,24 @@ fun GroupsScreen(
                                     }
 
                                     if (groupMembers.isNotEmpty()) {
-                                        val membersStr = if (group.groupType == "FAMILY_TRIP") {
-                                            groupMembers.joinToString("، ") { "${it.name} (${it.headcount} نفر)" }
+                                        val membersStr = when (group.groupType) {
+                                            "MULTI_GROUP_TRIP" -> {
+                                                groupMembers.joinToString("، ") { m ->
+                                                    val spentByM = groupExpenses.filter { it.payerId == m.id }.sumOf { it.amount }
+                                                    val spentTxt = if (spentByM > 0) (if (isFarsi) " - پرداخت: " else " - paid: ") + Localization.formatCurrency(spentByM, isFarsi, customCurrency) else ""
+                                                    "${m.name} (${m.headcount} نفر$spentTxt)"
+                                                }
+                                            }
+                                            "FAMILY_TRIP" -> groupMembers.joinToString("، ") { "${it.name} (${it.headcount} نفر)" }
+                                            else -> groupMembers.joinToString("، ") { it.name }
+                                        }
+                                        val labelPrefix = if (group.groupType == "MULTI_GROUP_TRIP") {
+                                            if (isFarsi) "گروه‌های شرکت‌کننده: " else "Participating Groups: "
                                         } else {
-                                            groupMembers.joinToString("، ") { it.name }
+                                            if (isFarsi) "اعضا: " else "Members: "
                                         }
                                         Text(
-                                            text = (if (isFarsi) "اعضا: " else "Members: ") + membersStr,
+                                            text = labelPrefix + membersStr,
                                             fontSize = 11.sp,
                                             color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.9f) else MaterialTheme.colorScheme.onSurfaceVariant,
                                             modifier = Modifier.padding(top = 4.dp)
@@ -2368,6 +2453,186 @@ fun GroupsScreen(
         }
     }
 
+    if (showCreateTripDialog) {
+        var tripName by remember { mutableStateOf("") }
+        var outingDate by remember { mutableStateOf<Long?>(null) }
+        val availableGroups = remember(groups) { groups.filter { !it.isFinished && it.groupType != "MULTI_GROUP_TRIP" } }
+        val selectedGroupIds = remember { mutableStateListOf<Int>() }
+
+        Dialog(onDismissRequest = { showCreateTripDialog = false }) {
+            Card(
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(24.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Text(
+                        text = Localization.getString("create_trip_party", isFarsi),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    OutlinedTextField(
+                        value = tripName,
+                        onValueChange = { tripName = it },
+                        label = { Text(text = if (isFarsi) "نام سفر یا مهمانی" else "Trip or Party Name") },
+                        modifier = Modifier.fillMaxWidth().testTag("new_trip_name_input"),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+
+                    Text(
+                        text = Localization.getString("outing_date", isFarsi),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
+                    )
+
+                    val context = LocalContext.current
+                    val calendar = Calendar.getInstance()
+                    val datePickerDialog = android.app.DatePickerDialog(
+                        context,
+                        { _, year, month, dayOfMonth ->
+                            val selectedCal = Calendar.getInstance().apply {
+                                set(Calendar.YEAR, year)
+                                set(Calendar.MONTH, month)
+                                set(Calendar.DAY_OF_MONTH, dayOfMonth)
+                            }
+                            outingDate = selectedCal.timeInMillis
+                        },
+                        calendar.get(Calendar.YEAR),
+                        calendar.get(Calendar.MONTH),
+                        calendar.get(Calendar.DAY_OF_MONTH)
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                            .clickable { datePickerDialog.show() }
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val dateText = if (outingDate != null) {
+                            val sdf = if (isFarsi) SimpleDateFormat("yyyy/MM/dd", Locale.getDefault()) else SimpleDateFormat("MMM dd, yyyy", Locale.US)
+                            val rawDate = sdf.format(Date(outingDate!!))
+                            if (isFarsi) Localization.formatPersianDigits(rawDate) else rawDate
+                        } else {
+                            Localization.getString("not_set", isFarsi)
+                        }
+                        
+                        Text(
+                            text = dateText,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (outingDate != null) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        
+                        Text(
+                            text = Localization.getString("set_date", isFarsi),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
+                    Text(
+                        text = Localization.getString("select_participating_groups", isFarsi),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
+                    )
+
+                    if (availableGroups.isEmpty()) {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(
+                                text = if (isFarsi) "ابتدا در تب «گروه‌ها و خانواده‌ها» حداقل یک گروه یا خانواده ایجاد کنید." else "First create at least one group or family in the 'Groups & Families' tab.",
+                                modifier = Modifier.padding(12.dp),
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
+                    } else {
+                        availableGroups.forEach { grp ->
+                            val grpMembers = remember(allMembersList, grp.id) { allMembersList.filter { it.groupId == grp.id } }
+                            val totalHc = grpMembers.sumOf { it.headcount.coerceAtLeast(1) }.coerceAtLeast(1)
+                            val isChecked = selectedGroupIds.contains(grp.id)
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(if (isChecked) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                                    .clickable {
+                                        if (isChecked) selectedGroupIds.remove(grp.id) else selectedGroupIds.add(grp.id)
+                                    }
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Checkbox(
+                                        checked = isChecked,
+                                        onCheckedChange = { chk ->
+                                            if (chk) selectedGroupIds.add(grp.id) else selectedGroupIds.remove(grp.id)
+                                        }
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column {
+                                        Text(
+                                            text = grp.name,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 14.sp
+                                        )
+                                        Text(
+                                            text = if (isFarsi) "شامل ${totalHc} نفر (${grpMembers.joinToString("، ") { it.name }})" else "${totalHc} people (${grpMembers.joinToString(", ") { it.name }})",
+                                            fontSize = 11.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { showCreateTripDialog = false },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(text = Localization.getString("cancel", isFarsi))
+                        }
+                        Button(
+                            onClick = {
+                                if (tripName.isNotBlank() && selectedGroupIds.isNotEmpty()) {
+                                    viewModel.createMultiGroupTrip(tripName.trim(), selectedGroupIds.toList(), outingDate)
+                                    showCreateTripDialog = false
+                                }
+                            },
+                            enabled = tripName.isNotBlank() && selectedGroupIds.isNotEmpty(),
+                            modifier = Modifier.weight(1.5f).testTag("save_trip_btn"),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(text = Localization.getString("save", isFarsi), fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     if (selectedGroupForAddMember != null) {
         val grp = selectedGroupForAddMember!!
         var newMemberName by remember { mutableStateOf("") }
@@ -2394,7 +2659,7 @@ fun GroupsScreen(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(10.dp)
                     )
-                    if (grp.groupType == "FAMILY_TRIP") {
+                    if (grp.groupType == "FAMILY_TRIP" || grp.groupType == "MULTI_GROUP_TRIP") {
                         OutlinedTextField(
                             value = newMemberHeadcount.toString(),
                             onValueChange = { str -> newMemberHeadcount = str.toIntOrNull()?.coerceAtLeast(1) ?: 1 },
@@ -2403,6 +2668,38 @@ fun GroupsScreen(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(10.dp)
                         )
+                    }
+                    if (grp.groupType == "MULTI_GROUP_TRIP") {
+                        val availableToAdd = remember(groups, allMembersList) {
+                            val existingGrpIds = allMembersList.filter { it.groupId == grp.id }.mapNotNull { m -> m.userId?.removePrefix("GROUP_")?.toIntOrNull() }
+                            groups.filter { !it.isFinished && it.groupType != "MULTI_GROUP_TRIP" && it.id !in existingGrpIds }
+                        }
+                        if (availableToAdd.isNotEmpty()) {
+                            Text(
+                                text = if (isFarsi) "انتخاب سریع از گروه‌های موجود:" else "Quick Select from existing groups:",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                availableToAdd.forEach { addGrp ->
+                                    val addMems = remember(allMembersList, addGrp.id) { allMembersList.filter { it.groupId == addGrp.id } }
+                                    val totalHc = addMems.sumOf { it.headcount.coerceAtLeast(1) }.coerceAtLeast(1)
+                                    FilterChip(
+                                        selected = false,
+                                        onClick = {
+                                            val colors = listOf("#FF6B6B", "#4DABF7", "#51CF66", "#FCC419", "#FF922B", "#CC5DE8", "#20C997")
+                                            viewModel.addMember(addGrp.name, colors.random(), totalHc, userId = "GROUP_${addGrp.id}", targetGroupId = grp.id)
+                                            selectedGroupForAddMember = null
+                                        },
+                                        label = { Text("${addGrp.name} ($totalHc نفر)", fontSize = 11.sp) }
+                                    )
+                                }
+                            }
+                        }
                     }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
