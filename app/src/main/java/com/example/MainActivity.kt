@@ -286,6 +286,7 @@ fun DashboardScreen(
     val smartTx by viewModel.smartTransactions.collectAsStateWithLifecycle()
     val balances by viewModel.memberBalances.collectAsStateWithLifecycle()
     val allMembersList by viewModel.allMembers.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     
     var showSettleDialog by remember { mutableStateOf<SettleTransaction?>(null) }
     var activeHistoryView by remember { mutableStateOf(false) } // toggle between settlements & expenses in activity history
@@ -380,6 +381,39 @@ fun DashboardScreen(
                         )
                     }
                 }
+            }
+        }
+
+        item {
+            val totalExp = expenses.sumOf { it.amount }
+            val totalHc = members.sumOf { it.headcount.coerceAtLeast(1) }.coerceAtLeast(1)
+            val costPerPerson = if (totalHc > 0) totalExp / totalHc else 0.0
+
+            Button(
+                onClick = {
+                    com.example.ui.components.PdfReportGenerator.generateAndSharePdf(
+                        context = context,
+                        group = activeGroup,
+                        members = members,
+                        allMembersList = allMembersList,
+                        expenses = expenses,
+                        balances = balances,
+                        costPerPerson = costPerPerson,
+                        isFarsi = isFarsi,
+                        customCurrency = customCurrency,
+                        reportTitle = if (isFarsi) "گزارش مالی و تفکیک حساب: ${activeGroup.name}" else "Financial Report: ${activeGroup.name}"
+                    )
+                },
+                modifier = Modifier.fillMaxWidth().testTag("dashboard_export_pdf_btn"),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+            ) {
+                Icon(imageVector = Icons.Rounded.Share, contentDescription = "PDF", modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = if (isFarsi) "📄 دریافت و اشتراک‌گذاری گزارش PDF این گروه" else "📄 Download & Share Group PDF Report",
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
 
@@ -1834,6 +1868,12 @@ fun ReportsScreen(
     val members by viewModel.currentMembers.collectAsStateWithLifecycle()
     val expenses by viewModel.currentExpenses.collectAsStateWithLifecycle()
     val splits by viewModel.currentSplits.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val allMembersList by viewModel.allMembers.collectAsStateWithLifecycle()
+    val groups by viewModel.groups.collectAsStateWithLifecycle()
+    val selectedGroupId by viewModel.selectedGroupId.collectAsStateWithLifecycle()
+    val activeGroup = remember(groups, selectedGroupId) { groups.find { it.id == selectedGroupId } }
+    val balances by viewModel.memberBalances.collectAsStateWithLifecycle()
 
     val reportMonth by viewModel.reportMonth.collectAsStateWithLifecycle()
     val reportYear by viewModel.reportYear.collectAsStateWithLifecycle()
@@ -1940,6 +1980,44 @@ fun ReportsScreen(
                     Icon(imageVector = Icons.AutoMirrored.Rounded.ArrowForward, contentDescription = "Next")
                 }
             }
+        }
+
+        val costPerPerson = remember(expenses, filteredExpenses, members, activeGroup) {
+            val totalExp = (if (activeGroup != null) expenses else filteredExpenses).sumOf { it.amount }
+            val totalHc = members.sumOf { it.headcount.coerceAtLeast(1) }.coerceAtLeast(1)
+            if (totalHc > 0) totalExp / totalHc else 0.0
+        }
+
+        Button(
+            onClick = {
+                com.example.ui.components.PdfReportGenerator.generateAndSharePdf(
+                    context = context,
+                    group = activeGroup,
+                    members = members,
+                    allMembersList = allMembersList,
+                    expenses = if (activeGroup != null) expenses else filteredExpenses,
+                    balances = balances,
+                    costPerPerson = costPerPerson,
+                    isFarsi = isFarsi,
+                    customCurrency = customCurrency,
+                    reportTitle = if (activeGroup != null) {
+                        if (isFarsi) "گزارش مالی و تفکیک حساب: ${activeGroup.name}" else "Financial Report: ${activeGroup.name}"
+                    } else {
+                        val mName = if (isFarsi) listOf("ژانویه", "فوریه", "مارس", "آوریل", "مه", "ژوئن", "ژوئیه", "اوت", "سپتامبر", "اکتبر", "نوامبر", "دسامبر")[reportMonth - 1] else listOf("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")[reportMonth - 1]
+                        if (isFarsi) "گزارش مخارج ماهانه $mName ${Localization.formatNumber(reportYear.toDouble(), isFarsi)}" else "Monthly Expense Report - $mName $reportYear"
+                    }
+                )
+            },
+            modifier = Modifier.fillMaxWidth().testTag("export_pdf_btn"),
+            shape = RoundedCornerShape(14.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+        ) {
+            Icon(imageVector = Icons.Rounded.Share, contentDescription = "PDF", modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = if (isFarsi) "📄 دریافت و اشتراک‌گذاری گزارش کامل PDF" else "📄 Download & Share Complete PDF Report",
+                fontWeight = FontWeight.Bold
+            )
         }
 
         // Spending Summary Info Card
