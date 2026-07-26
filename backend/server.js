@@ -1,9 +1,11 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const app = express();
 
 app.use(cors());
 app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
 
 // In-Memory / Sample Database for Update Policy and Admin Messages
 let appConfigState = {
@@ -56,6 +58,11 @@ app.post('/api/admin/message', (req, res) => {
   };
 
   res.status(200).json({ success: true, updatedMessage: appConfigState.activeMessage });
+});
+
+// Admin Dashboard Web Routes
+app.get(['/', '/admin', '/dashboard'], (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 const PORT = process.env.PORT || 3000;
