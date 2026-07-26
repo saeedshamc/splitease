@@ -27,9 +27,33 @@ let appConfigState = {
   }
 };
 
+let activityLogs = [
+  { id: 1, action: "بروزرسانی پیام عمومی سیستم (خوش‌آمدگویی)", type: "MESSAGE", timestamp: Date.now() - 3600000 },
+  { id: 2, action: "انتشار تنظیمات آپدیت نسخه 1.0.0 (اختیاری)", type: "UPDATE", timestamp: Date.now() - 7200000 },
+  { id: 3, action: "بررسی وضعیت سرورهای Vercel و اتصال دیتابیس", type: "SYSTEM", timestamp: Date.now() - 10800000 }
+];
+
+let userEngagement = [
+  { day: "شنبه", activeUsers: 142 },
+  { day: "یکشنبه", activeUsers: 198 },
+  { day: "دوشنبه", activeUsers: 245 },
+  { day: "سه‌شنبه", activeUsers: 310 },
+  { day: "چهارشنبه", activeUsers: 289 },
+  { day: "پنج‌شنبه", activeUsers: 412 },
+  { day: "جمعه", activeUsers: 480 }
+];
+
 // GET /api/config - App fetches this on startup
 app.get('/api/config', (req, res) => {
   res.status(200).json(appConfigState);
+});
+
+// GET /api/admin/stats - Admin dashboard statistics and audit logs
+app.get('/api/admin/stats', (req, res) => {
+  res.status(200).json({
+    activityLogs: activityLogs.slice(0, 10),
+    userEngagement
+  });
 });
 
 // POST /api/admin/update-policy - Admin panel updates the app version requirements
@@ -42,7 +66,15 @@ app.post('/api/admin/update-policy', (req, res) => {
   if (upcomingFeaturesTeaser !== undefined) appConfigState.updatePolicy.upcomingFeaturesTeaser = upcomingFeaturesTeaser;
   if (downloadUrl !== undefined) appConfigState.updatePolicy.downloadUrl = downloadUrl;
 
-  res.status(200).json({ success: true, updatedPolicy: appConfigState.updatePolicy });
+  activityLogs.unshift({
+    id: Date.now(),
+    action: `تنظیم آپدیت جدید برای نسخه ${latestVersionName || appConfigState.updatePolicy.latestVersionName} (${isMandatory ? 'اجباری' : 'اختیاری'})`,
+    type: "UPDATE",
+    timestamp: Date.now()
+  });
+  if (activityLogs.length > 20) activityLogs.pop();
+
+  res.status(200).json({ success: true, updatedPolicy: appConfigState.updatePolicy, activityLogs });
 });
 
 // POST /api/admin/message - Admin sends a broadcast announcement
@@ -57,7 +89,15 @@ app.post('/api/admin/message', (req, res) => {
     timestamp: Date.now()
   };
 
-  res.status(200).json({ success: true, updatedMessage: appConfigState.activeMessage });
+  activityLogs.unshift({
+    id: Date.now(),
+    action: `ارسال پیام عمومی: ${title || "پیام مدیر"} (${isActive !== false ? 'فعال' : 'غیرفعال'})`,
+    type: "MESSAGE",
+    timestamp: Date.now()
+  });
+  if (activityLogs.length > 20) activityLogs.pop();
+
+  res.status(200).json({ success: true, updatedMessage: appConfigState.activeMessage, activityLogs });
 });
 
 // Admin Dashboard Web Routes

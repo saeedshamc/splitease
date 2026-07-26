@@ -7,6 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -29,11 +30,12 @@
         }
     </script>
     <style>
-        body { font-family: 'Vazirmatn', sans-serif; background-color: #0f172a; color: #f8fafc; }
+        body { font-family: 'Vazirmatn', sans-serif; background-color: #0f172a; color: #f8fafc; transition: background-color 0.3s, color 0.3s; }
         .glass-panel {
             background: rgba(30, 41, 59, 0.7);
             backdrop-filter: blur(12px);
             border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: background 0.3s, border-color 0.3s;
         }
         .phone-mockup {
             width: 320px;
@@ -44,6 +46,7 @@
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
             position: relative;
             overflow: hidden;
+            transition: border-color 0.3s, background 0.3s;
         }
         .phone-notch {
             width: 120px;
@@ -56,12 +59,38 @@
             left: 50%;
             transform: translateX(-50%);
             z-index: 50;
+            transition: background 0.3s;
         }
         /* Custom scrollbar */
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #0f172a; }
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+        /* Light Theme Styles */
+        body.light-theme { background-color: #f1f5f9; color: #0f172a; }
+        body.light-theme .glass-panel {
+            background: rgba(255, 255, 255, 0.9) !important;
+            border-color: rgba(0, 0, 0, 0.08) !important;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
+            color: #0f172a !important;
+        }
+        body.light-theme header { background: rgba(255, 255, 255, 0.9) !important; border-color: #e2e8f0 !important; }
+        body.light-theme .text-slate-300, body.light-theme .text-slate-400 { color: #475569 !important; }
+        body.light-theme .text-white { color: #0f172a !important; }
+        body.light-theme input, body.light-theme textarea, body.light-theme select { background-color: #ffffff !important; color: #0f172a !important; border-color: #cbd5e1 !important; }
+        body.light-theme .bg-slate-800\/80, body.light-theme .bg-slate-800\/50, body.light-theme .bg-slate-800, body.light-theme .bg-slate-900\/60 { background-color: #f8fafc !important; border-color: #cbd5e1 !important; color: #0f172a !important; }
+        body.light-theme .border-slate-700, body.light-theme .border-slate-800 { border-color: #cbd5e1 !important; }
+        body.light-theme .phone-mockup { border-color: #64748b; background: #f8fafc; }
+        body.light-theme .phone-notch { background: #64748b; }
+        body.light-theme .d3-axis text { fill: #334155 !important; }
+        body.light-theme .d3-axis path, body.light-theme .d3-axis line { stroke: #cbd5e1 !important; }
+        body.light-theme table { color: #0f172a; }
+        body.light-theme tbody tr { border-color: #e2e8f0 !important; }
+        
+        .d3-axis text { font-family: 'Vazirmatn', sans-serif; font-size: 11px; fill: #94a3b8; }
+        .d3-axis path, .d3-axis line { stroke: #334155; }
+        .bar:hover { opacity: 0.85; transition: opacity 0.2s; }
     </style>
 </head>
 <body class="min-h-screen pb-12">
@@ -78,12 +107,21 @@
                     <p class="text-xs text-slate-400">سیستم مدیریت آپدیت و پیام‌های عمومی کاربران</p>
                 </div>
             </div>
+            <div class="flex items-center space-x-3 space-x-reverse flex-1 max-w-md mx-6">
+                <div class="relative w-full">
+                    <input type="text" id="search-input" oninput="filterLogsAndMessages(this.value)" placeholder="جستجو در تاریخچه فعالیت‌ها و پیام‌ها..." class="w-full bg-slate-800/80 border border-slate-700 rounded-xl py-1.5 px-3 pr-9 text-xs text-white focus:outline-none focus:border-blue-500 transition">
+                    <i class="fa-solid fa-search absolute right-3 top-2.5 text-slate-400 text-xs"></i>
+                </div>
+            </div>
             <div class="flex items-center space-x-3 space-x-reverse">
+                <button onclick="toggleTheme()" id="theme-toggle-btn" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition" title="تغییر تم (تاریک/روشن)">
+                    <i id="theme-icon" class="fa-solid fa-sun text-sm text-amber-400"></i>
+                </button>
                 <span id="connection-status" class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                     <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse ml-2"></span>
                     متصل به سرور Vercel
                 </span>
-                <button onclick="fetchConfig()" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition" title="بارگذاری مجدد اطلاعات">
+                <button onclick="fetchConfig(); fetchStats();" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition" title="بارگذاری مجدد اطلاعات">
                     <i class="fa-solid fa-rotate text-sm"></i>
                 </button>
             </div>
@@ -322,6 +360,58 @@
             </div>
 
         </div>
+
+        <!-- Section 3 & 4: User Engagement Chart (D3.js) & Audit Activity Logs -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-8">
+            <!-- D3.js Active Users Chart -->
+            <div class="lg:col-span-6 glass-panel rounded-2xl p-6 shadow-xl relative overflow-hidden flex flex-col">
+                <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 to-pink-500"></div>
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center space-x-3 space-x-reverse">
+                        <div class="w-10 h-10 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
+                            <i class="fa-solid fa-chart-column text-lg"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-base font-bold text-white">نمودار تعامل و کاربران فعال (D3.js)</h2>
+                            <p class="text-xs text-slate-400">آمار روزانه کاربران فعال و نرخ درگیری با اپلیکیشن</p>
+                        </div>
+                    </div>
+                    <span class="text-xs font-medium px-2.5 py-1 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20">Analytics</span>
+                </div>
+                <div id="chart-container" class="flex-1 min-h-[220px] flex items-center justify-center pt-2"></div>
+            </div>
+
+            <!-- Activity Logs (Audit Trail) -->
+            <div class="lg:col-span-6 glass-panel rounded-2xl p-6 shadow-xl relative overflow-hidden flex flex-col">
+                <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-400"></div>
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center space-x-3 space-x-reverse">
+                        <div class="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                            <i class="fa-solid fa-list-check text-lg"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-base font-bold text-white">تاریخچه فعالیت مدیران (Activity Logs)</h2>
+                            <p class="text-xs text-slate-400">آخرین ۱۰ تغییر و عملیات ثبت شده در پنل مدیریت</p>
+                        </div>
+                    </div>
+                    <span class="text-xs font-medium px-2.5 py-1 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Audit Trail</span>
+                </div>
+                <div class="flex-1 overflow-y-auto max-h-[240px] pr-1">
+                    <table class="w-full text-right text-xs">
+                        <thead>
+                            <tr class="border-b border-slate-700/80 text-slate-400 pb-2">
+                                <th class="pb-2 font-semibold">عملیات</th>
+                                <th class="pb-2 font-semibold w-24">نوع</th>
+                                <th class="pb-2 font-semibold w-24 text-left">زمان</th>
+                            </tr>
+                        </thead>
+                        <tbody id="activity-logs-body" class="divide-y divide-slate-800/60 text-slate-300">
+                            <!-- Logs dynamically inserted here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </main>
 
     <!-- Toast Notification -->
@@ -332,11 +422,164 @@
 
     <script>
         let currentTab = 'update';
+        let allActivityLogs = [];
+        let currentUserEngagement = [];
 
         // Initialize and Load Data
         document.addEventListener('DOMContentLoaded', () => {
+            if (localStorage.getItem('admin_theme') === 'light') {
+                document.body.classList.add('light-theme');
+                const icon = document.getElementById('theme-icon');
+                if (icon) icon.className = 'fa-solid fa-moon text-sm text-indigo-400';
+            }
             fetchConfig();
+            fetchStats();
         });
+
+        function toggleTheme() {
+            const isLight = document.body.classList.toggle('light-theme');
+            localStorage.setItem('admin_theme', isLight ? 'light' : 'dark');
+            const icon = document.getElementById('theme-icon');
+            if (icon) {
+                icon.className = isLight ? 'fa-solid fa-moon text-sm text-indigo-400' : 'fa-solid fa-sun text-sm text-amber-400';
+            }
+            if (currentUserEngagement && currentUserEngagement.length > 0) {
+                renderChart(currentUserEngagement);
+            }
+        }
+
+        async function fetchStats() {
+            try {
+                const res = await fetch('/api/admin/stats');
+                if (res.ok) {
+                    const data = await res.json();
+                    allActivityLogs = data.activityLogs || [];
+                    currentUserEngagement = data.userEngagement || [];
+                    renderLogs(allActivityLogs);
+                    renderChart(currentUserEngagement);
+                }
+            } catch (err) {
+                console.error("Error fetching stats:", err);
+            }
+        }
+
+        function filterLogsAndMessages(keyword) {
+            const kw = keyword.trim().toLowerCase();
+            if (!kw) {
+                renderLogs(allActivityLogs);
+                return;
+            }
+            const filtered = allActivityLogs.filter(log => 
+                log.action.toLowerCase().includes(kw) || log.type.toLowerCase().includes(kw)
+            );
+            renderLogs(filtered);
+        }
+
+        function renderLogs(logs) {
+            const tbody = document.getElementById('activity-logs-body');
+            if (!tbody) return;
+            if (logs.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="3" class="py-4 text-center text-slate-500">هیچ فعالیتی یافت نشد.</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = logs.map(log => {
+                const dateStr = new Date(log.timestamp).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
+                const typeBadge = log.type === 'UPDATE' 
+                    ? `<span class="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px]">آپدیت</span>`
+                    : log.type === 'MESSAGE'
+                    ? `<span class="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px]">پیام</span>`
+                    : `<span class="px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20 text-[10px]">سیستم</span>`;
+                return `
+                    <tr class="hover:bg-slate-800/40 transition">
+                        <td class="py-2.5 font-medium pr-1">${log.action}</td>
+                        <td class="py-2.5">${typeBadge}</td>
+                        <td class="py-2.5 text-left text-slate-400 pl-1" dir="ltr">${dateStr}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function renderChart(data) {
+            const container = document.getElementById('chart-container');
+            if (!container || !window.d3) return;
+            container.innerHTML = '';
+            
+            const isLight = document.body.classList.contains('light-theme');
+            const margin = { top: 20, right: 20, bottom: 30, left: 35 };
+            const width = container.clientWidth || 400;
+            const height = 200;
+            const chartWidth = width - margin.left - margin.right;
+            const chartHeight = height - margin.top - margin.bottom;
+
+            const svg = d3.select('#chart-container')
+                .append('svg')
+                .attr('width', width)
+                .attr('height', height)
+                .append('g')
+                .attr('transform', `translate(${margin.left},${margin.top})`);
+
+            const x = d3.scaleBand()
+                .domain(data.map(d => d.day))
+                .range([0, chartWidth])
+                .padding(0.35);
+
+            const y = d3.scaleLinear()
+                .domain([0, d3.max(data, d => d.activeUsers) * 1.15])
+                .range([chartHeight, 0]);
+
+            svg.append('g')
+                .attr('transform', `translate(0,${chartHeight})`)
+                .attr('class', 'd3-axis')
+                .call(d3.axisBottom(x))
+                .selectAll("text")
+                .style("fill", isLight ? "#475569" : "#94a3b8")
+                .style("font-family", "Vazirmatn");
+
+            svg.append('g')
+                .attr('class', 'd3-axis')
+                .call(d3.axisLeft(y).ticks(4))
+                .selectAll("text")
+                .style("fill", isLight ? "#475569" : "#94a3b8")
+                .style("font-family", "Vazirmatn");
+
+            // Gradient for Bars
+            const defs = svg.append("defs");
+            const gradient = defs.append("linearGradient")
+                .attr("id", "bar-gradient")
+                .attr("x1", "0%").attr("y1", "0%")
+                .attr("x2", "0%").attr("y2", "100%");
+            gradient.append("stop").attr("offset", "0%").attr("stop-color", "#a855f7");
+            gradient.append("stop").attr("offset", "100%").attr("stop-color", "#6366f1");
+
+            svg.selectAll(".bar")
+                .data(data)
+                .enter()
+                .append("rect")
+                .attr("class", "bar")
+                .attr("x", d => x(d.day))
+                .attr("y", chartHeight)
+                .attr("width", x.bandwidth())
+                .attr("height", 0)
+                .attr("rx", 6)
+                .style("fill", "url(#bar-gradient)")
+                .transition()
+                .duration(800)
+                .attr("y", d => y(d.activeUsers))
+                .attr("height", d => chartHeight - y(d.activeUsers));
+
+            svg.selectAll(".label")
+                .data(data)
+                .enter()
+                .append("text")
+                .attr("x", d => x(d.day) + x.bandwidth() / 2)
+                .attr("y", d => y(d.activeUsers) - 6)
+                .attr("text-anchor", "middle")
+                .style("fill", isLight ? "#334155" : "#e2e8f0")
+                .style("font-size", "10px")
+                .style("font-weight", "bold")
+                .style("font-family", "Vazirmatn")
+                .text(d => d.activeUsers);
+        }
 
         function setPreviewTab(tab) {
             currentTab = tab;
@@ -494,6 +737,7 @@
                 });
                 if (!response.ok) throw new Error();
                 showToast('تنظیمات آپدیت با موفقیت در سرور ثبت شد', 'success');
+                fetchStats();
             } catch (err) {
                 showToast('خطا در ثبت تنظیمات آپدیت', 'error');
             } finally {
@@ -525,6 +769,7 @@
                 if (!response.ok) throw new Error();
                 showToast('پیام عمومی با موفقیت در سرور منتشر شد', 'success');
                 setPreviewTab('msg');
+                fetchStats();
             } catch (err) {
                 showToast('خطا در انتشار پیام', 'error');
             } finally {
