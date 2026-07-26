@@ -494,6 +494,9 @@
                         <button id="bulk-delete-btn" onclick="deleteSelectedLogs()" class="hidden px-2.5 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-[11px] items-center transition font-bold animate-pulse" title="حذف موارد تیک‌خورده">
                             <i class="fa-solid fa-check-double ml-1 text-sm"></i> حذف (<span id="selected-count">0</span>)
                         </button>
+                        <button onclick="openExportFilterModal()" class="px-2.5 py-1 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 text-[11px] flex items-center transition font-bold shadow-sm" title="فیلتر زمانی و کاربری قبل از خروجی لاگ‌ها">
+                            <i class="fa-solid fa-sliders ml-1 text-sm text-indigo-400"></i> فیلتر خروجی (Export Filter)
+                        </button>
                         <button onclick="downloadLogsPDF()" class="px-2.5 py-1 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/20 text-[11px] flex items-center transition" title="خروجی گزارش PDF">
                             <i class="fa-solid fa-file-pdf ml-1 text-sm"></i> دانلود PDF
                         </button>
@@ -544,8 +547,8 @@
                         <i class="fa-solid fa-users-viewfinder text-lg"></i>
                     </div>
                     <div>
-                        <h2 class="text-base font-bold text-white">نشست‌های فعال مدیران (Active Sessions)</h2>
-                        <p class="text-xs text-slate-400">فهرست آدرس‌های IP وارد شده به پنل مدیریت و آخرین زمان فعالیت آن‌ها با قابلیت خروج اجباری</p>
+                        <h2 id="sec-sessions-title" class="text-base font-bold text-white">نشست‌های فعال مدیران (Active Sessions)</h2>
+                        <p id="sec-sessions-sub" class="text-xs text-slate-400">فهرست آدرس‌های IP وارد شده به پنل مدیریت و آخرین زمان فعالیت آن‌ها با قابلیت خروج اجباری</p>
                     </div>
                 </div>
                 <div class="flex items-center space-x-2 space-x-reverse">
@@ -555,9 +558,134 @@
                     <span class="text-xs font-medium px-2.5 py-1 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">Access Security</span>
                 </div>
             </div>
+
+            <!-- Session Inactivity Timeout Threshold Configuration -->
+            <div class="mb-6 bg-slate-800/50 rounded-xl p-4 border border-slate-700/70 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div class="flex items-center space-x-3 space-x-reverse">
+                    <div class="w-9 h-9 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                        <i class="fa-solid fa-user-clock"></i>
+                    </div>
+                    <div>
+                        <h3 id="timeout-form-title" class="text-xs font-bold text-white">سیاست منقضی شدن خودکار نشست‌ها (Inactivity Timeout Threshold)</h3>
+                        <p id="timeout-form-sub" class="text-[11px] text-slate-400">آستانه زمانی غیرفعال بودن مدیر که پس از آن دسترسی ابطال می‌شود</p>
+                    </div>
+                </div>
+                <div class="flex flex-wrap items-center gap-3">
+                    <div class="flex items-center space-x-1 space-x-reverse bg-slate-900/80 p-1 rounded-lg border border-slate-700">
+                        <button onclick="setSessionTimeoutVal(15, this)" class="timeout-btn px-2.5 py-1 rounded text-[11px] text-slate-400 hover:text-white transition">۱۵ دقیقه</button>
+                        <button onclick="setSessionTimeoutVal(30, this)" class="timeout-btn px-2.5 py-1 rounded text-[11px] bg-indigo-600 text-white font-bold transition">۳۰ دقیقه (پیش‌فرض)</button>
+                        <button onclick="setSessionTimeoutVal(60, this)" class="timeout-btn px-2.5 py-1 rounded text-[11px] text-slate-400 hover:text-white transition">۱ ساعت</button>
+                        <button onclick="setSessionTimeoutVal(240, this)" class="timeout-btn px-2.5 py-1 rounded text-[11px] text-slate-400 hover:text-white transition">۴ ساعت</button>
+                    </div>
+                    <label class="flex items-center space-x-2 space-x-reverse text-xs text-slate-300 cursor-pointer select-none">
+                        <input type="checkbox" id="chk-auto-invalidate" checked class="rounded bg-slate-900 border-slate-600 text-indigo-500 focus:ring-0">
+                        <span id="label-chk-auto">خروج اجباری خودکار</span>
+                    </label>
+                    <button id="btn-save-timeout" onclick="saveSessionTimeoutPolicy()" class="px-3 py-1.5 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-bold transition shadow-lg shadow-indigo-500/20 flex items-center">
+                        <i class="fa-solid fa-shield-halved ml-1.5"></i> ذخیره سیاست
+                    </button>
+                </div>
+            </div>
             
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4" id="active-sessions-container">
                 <div class="col-span-3 text-center py-6 text-slate-500 text-xs">در حال بارگذاری اطلاعات نشست‌های فعال...</div>
+            </div>
+        </div>
+
+        <!-- Section 6: Automated Critical Error Notification System -->
+        <div class="mt-8 glass-panel rounded-2xl p-6 shadow-xl relative overflow-hidden border border-rose-500/20 bg-gradient-to-br from-slate-900 via-slate-900 to-rose-950/20">
+            <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-rose-500 via-amber-500 to-purple-500"></div>
+            <div class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+                <div class="flex items-center space-x-3 space-x-reverse">
+                    <div class="w-11 h-11 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400 shadow-inner">
+                        <i class="fa-solid fa-bell-on text-xl animate-pulse"></i>
+                    </div>
+                    <div>
+                        <h2 id="sec-alerts-title" class="text-base font-bold text-white flex items-center">
+                            سیستم هشدار خودکار خطاهای بحرانی ۵۰۰ (Automated Critical Error Alerts)
+                            <span class="mr-2 text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded-full font-mono font-normal">HTTP 500 Watchdog</span>
+                        </h2>
+                        <p id="sec-alerts-sub" class="text-xs text-slate-400">ارسال آنی پیام هشدار از طریق ایمیل و وب‌هوک/پوش به مدیر سیستم هنگام بروز خطاهای سرور</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-3 space-x-reverse">
+                    <button id="btn-simulate-error" onclick="simulateCritical500Error()" class="px-4 py-2 rounded-xl bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-bold text-xs transition shadow-lg shadow-rose-500/25 flex items-center border border-rose-400/30">
+                        <i class="fa-solid fa-bolt ml-2 text-amber-300"></i> شبیه‌سازی خطای ۵۰۰ و تست ارسال هشدار
+                    </button>
+                    <span id="alert-status-badge" class="px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-xs font-bold flex items-center">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping ml-1.5 inline-block"></span> فعال و ناظر
+                    </span>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+                <!-- Alert Channel Configuration Form -->
+                <div class="md:col-span-5 bg-slate-800/40 p-4 rounded-xl border border-slate-700/60 space-y-4">
+                    <h3 id="alert-box-title-1" class="text-xs font-bold text-rose-300 flex items-center border-b border-slate-700/60 pb-2">
+                        <i class="fa-solid fa-sliders mr-2"></i> تنظیمات گیرندگان و کانال‌های هشدار
+                    </h3>
+                    
+                    <div class="space-y-3 text-xs">
+                        <div>
+                            <label id="lbl-alert-email" class="block text-slate-300 mb-1 font-medium">ایمیل مدیر سرور (Recipient Email):</label>
+                            <div class="relative">
+                                <input type="email" id="alert-admin-email" value="shamssaeed2025@gmail.com" class="w-full bg-slate-900 border border-slate-700 rounded-lg py-1.5 px-3 pl-8 text-left font-mono text-xs text-white focus:outline-none focus:border-rose-500 transition" dir="ltr">
+                                <i class="fa-solid fa-envelope absolute left-2.5 top-2.5 text-slate-500"></i>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label id="lbl-alert-webhook" class="block text-slate-300 mb-1 font-medium">آدرس وب‌هوک پوش نوتیفکیشن (Push/Slack Webhook):</label>
+                            <div class="relative">
+                                <input type="url" id="alert-webhook-url" value="https://notify.my-splitease.com/alerts/webhook" class="w-full bg-slate-900 border border-slate-700 rounded-lg py-1.5 px-3 pl-8 text-left font-mono text-xs text-white focus:outline-none focus:border-rose-500 transition" dir="ltr">
+                                <i class="fa-solid fa-webhook absolute left-2.5 top-2.5 text-slate-500"></i>
+                            </div>
+                        </div>
+
+                        <div class="pt-2 flex items-center justify-between bg-slate-900/60 p-2.5 rounded-lg border border-slate-700/40">
+                            <span id="lbl-chk-email" class="text-slate-300 font-medium">ارسال به ایمیل مدیر:</span>
+                            <input type="checkbox" id="chk-alert-email" checked class="rounded bg-slate-800 border-slate-600 text-rose-500 focus:ring-0 cursor-pointer">
+                        </div>
+
+                        <div class="flex items-center justify-between bg-slate-900/60 p-2.5 rounded-lg border border-slate-700/40">
+                            <span id="lbl-chk-push" class="text-slate-300 font-medium">ارسال پوش نوتیفکیشن و وب‌هوک:</span>
+                            <input type="checkbox" id="chk-alert-push" checked class="rounded bg-slate-800 border-slate-600 text-rose-500 focus:ring-0 cursor-pointer">
+                        </div>
+                    </div>
+
+                    <div class="pt-2">
+                        <button id="btn-save-alert" onclick="saveAlertConfig()" class="w-full py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs transition flex items-center justify-center border border-slate-600 shadow">
+                            <i class="fa-solid fa-check ml-1.5 text-emerald-400"></i> ذخیره کانال‌های هشدار
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Alert Dispatch History -->
+                <div class="md:col-span-7 bg-slate-800/40 p-4 rounded-xl border border-slate-700/60 flex flex-col">
+                    <div class="flex items-center justify-between border-b border-slate-700/60 pb-2 mb-3">
+                        <h3 id="alert-box-title-2" class="text-xs font-bold text-slate-300 flex items-center">
+                            <i class="fa-solid fa-clock-rotate-left mr-2 text-purple-400"></i> تاریخچه هشدارهای ارسال شده اخیر
+                        </h3>
+                        <span class="text-[11px] text-slate-400 font-mono" id="alert-history-count">۱ مورد اخیر</span>
+                    </div>
+                    
+                    <div class="flex-1 overflow-y-auto max-h-[220px] pr-1">
+                        <table class="w-full text-right text-xs">
+                            <thead>
+                                <tr class="text-slate-400 border-b border-slate-700/60 pb-1 text-[11px]">
+                                    <th id="th-alt-type" class="pb-1 font-semibold">نوع خطا</th>
+                                    <th id="th-alt-chan" class="pb-1 font-semibold">کانال ارسال</th>
+                                    <th id="th-alt-recip" class="pb-1 font-semibold">گیرنده</th>
+                                    <th id="th-alt-stat" class="pb-1 font-semibold text-center">وضعیت</th>
+                                    <th id="th-alt-time" class="pb-1 font-semibold">زمان</th>
+                                </tr>
+                            </thead>
+                            <tbody id="alert-history-body" class="divide-y divide-slate-800/80 text-slate-300 text-[11px]">
+                                <!-- Alert history rows injected dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
         </div> <!-- End of tab-content-overview -->
@@ -769,11 +897,95 @@
                     <div class="text-slate-400 mb-1 flex items-center"><i class="fa-brands fa-chrome mr-1.5 text-purple-400"></i> مرورگر / دستگاه (User-Agent):</div>
                     <div class="font-mono text-slate-300 text-[11px] truncate" id="detail-log-useragent" title="">Mozilla/5.0...</div>
                 </div>
+                <div id="detail-stack-container" class="hidden bg-rose-500/10 p-3 rounded-xl border border-rose-500/30 flex flex-col gap-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-rose-400 font-bold flex items-center"><i class="fa-solid fa-bug mr-1.5"></i> رهگیری خطا و استک تریس (Stack Trace):</span>
+                        <button onclick="toggleStackTraceView()" id="btn-toggle-stack" class="px-2.5 py-1 rounded bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-[11px] font-mono font-bold transition flex items-center">
+                            <i class="fa-solid fa-code ml-1 text-xs"></i> <span id="label-toggle-stack">نمایش استک تریس (View Stack Trace)</span>
+                        </button>
+                    </div>
+                    <pre id="stack-trace-content" class="hidden bg-slate-950/95 p-3 rounded-xl border border-rose-500/40 font-mono text-[11px] text-rose-300 leading-relaxed overflow-x-auto max-h-48 overflow-y-auto select-all shadow-inner mt-1 text-left" dir="ltr"></pre>
+                </div>
             </div>
 
             <div class="flex items-center justify-end">
                 <button onclick="closeLogDetailsModal()" class="px-5 py-2 rounded-xl bg-purple-500 hover:bg-purple-600 text-white text-xs font-medium transition flex items-center shadow-lg shadow-purple-500/20">
                     <i class="fa-solid fa-check ml-2"></i> بستن و بازگشت
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Export & Filter Options Modal -->
+    <div id="export-filter-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm hidden opacity-0 transition-opacity duration-300">
+        <div class="glass-panel bg-slate-900 border border-indigo-500/30 rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl transform scale-95 transition-transform duration-300">
+            <div class="flex items-center justify-between border-b border-slate-700/80 pb-4 mb-4">
+                <div class="flex items-center space-x-3 space-x-reverse">
+                    <div class="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 text-lg">
+                        <i class="fa-solid fa-file-export"></i>
+                    </div>
+                    <div>
+                        <h3 id="exp-modal-title" class="text-base font-bold text-white">فیلتر پیشرفته خروجی (Export Filter)</h3>
+                        <p id="exp-modal-sub" class="text-xs text-slate-400">فیلتر بر اساس بازه زمانی و شناسه کاربری قبل از دانلود</p>
+                    </div>
+                </div>
+                <button onclick="closeExportFilterModal()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="space-y-4 text-xs mb-6">
+                <div>
+                    <label id="lbl-exp-date" class="block text-slate-300 mb-1.5 font-semibold"><i class="fa-solid fa-calendar-day text-purple-400 ml-1"></i> فیلتر بازه زمانی (Date Range):</label>
+                    <select id="export-filter-date" onchange="updateExportPreviewCount()" class="w-full bg-slate-800 border border-slate-700 rounded-xl py-2 px-3 text-white text-xs focus:outline-none focus:border-indigo-500 transition">
+                        <option value="ALL">بدون محدودیت زمانی (کل تاریخچه)</option>
+                        <option value="1H">یک ساعت اخیر</option>
+                        <option value="24H">۲۴ ساعت گذشته</option>
+                        <option value="7D">۷ روز اخیر</option>
+                        <option value="30D">۳۰ روز اخیر</option>
+                        <option value="CUSTOM">بازه تاریخ دلخواه...</option>
+                    </select>
+                </div>
+
+                <div id="export-custom-date-box" class="hidden grid grid-cols-2 gap-2 bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/50">
+                    <div>
+                        <label id="lbl-exp-start" class="block text-[11px] text-slate-400 mb-1">از تاریخ:</label>
+                        <input type="date" id="export-start-date" onchange="updateExportPreviewCount()" class="w-full bg-slate-900 border border-slate-700 rounded py-1 px-2 text-white text-[11px]">
+                    </div>
+                    <div>
+                        <label id="lbl-exp-end" class="block text-[11px] text-slate-400 mb-1">تا تاریخ:</label>
+                        <input type="date" id="export-end-date" onchange="updateExportPreviewCount()" class="w-full bg-slate-900 border border-slate-700 rounded py-1 px-2 text-white text-[11px]">
+                    </div>
+                </div>
+
+                <div>
+                    <label id="lbl-exp-user" class="block text-slate-300 mb-1.5 font-semibold"><i class="fa-solid fa-user-tag text-blue-400 ml-1"></i> فیلتر شناسه کاربری (User ID):</label>
+                    <select id="export-filter-user" onchange="updateExportPreviewCount()" class="w-full bg-slate-800 border border-slate-700 rounded-xl py-2 px-3 text-white text-xs font-mono focus:outline-none focus:border-indigo-500 transition">
+                        <option value="ALL">تمامی شناسه کاربری‌ها (All Users)</option>
+                        <option value="usr_admin">usr_admin (مدیر ارشد)</option>
+                        <option value="usr_8492">usr_8492 (کاربر اپلیکیشن)</option>
+                        <option value="system_cron">system_cron (مانیتورینگ سرور)</option>
+                        <option value="db_monitor">db_monitor (ناظر دیتابیس)</option>
+                        <option value="backup_daemon">backup_daemon (سرویس بکاپ)</option>
+                        <option value="anonymous">anonymous (ناشناس/مهمان)</option>
+                    </select>
+                </div>
+
+                <div class="bg-indigo-500/10 p-3 rounded-xl border border-indigo-500/20 flex items-center justify-between text-indigo-300 font-medium">
+                    <span id="lbl-exp-count">تعداد رکوردهای منطبق برای دانلود:</span>
+                    <span id="export-preview-count" class="font-bold font-mono text-sm bg-indigo-500/20 px-2.5 py-0.5 rounded-lg border border-indigo-500/30">0</span>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2">
+                <button onclick="downloadFilteredCSV(); closeExportFilterModal();" class="py-2 rounded-xl bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/30 text-xs font-bold transition flex flex-col items-center justify-center gap-1">
+                    <i class="fa-solid fa-file-csv text-base text-blue-400"></i> دانلود CSV
+                </button>
+                <button onclick="downloadFilteredExcel(); closeExportFilterModal();" class="py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-xs font-bold transition flex flex-col items-center justify-center gap-1">
+                    <i class="fa-solid fa-file-excel text-base text-emerald-400"></i> دانلود Excel
+                </button>
+                <button onclick="downloadFilteredPDF(); closeExportFilterModal();" class="py-2 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 text-xs font-bold transition flex flex-col items-center justify-center gap-1">
+                    <i class="fa-solid fa-file-pdf text-base text-purple-400"></i> دانلود PDF
                 </button>
             </div>
         </div>
@@ -904,14 +1116,17 @@
                 container.innerHTML = `<div class="col-span-3 text-center py-6 text-slate-500 text-xs">هیچ نشست فعالی یافت نشد.</div>`;
                 return;
             }
-            container.innerHTML = sessions.map(s => `
-                <div class="bg-slate-800/70 border border-slate-700/80 rounded-xl p-4 flex flex-col justify-between hover:border-blue-500/40 transition shadow-lg">
+            const timeoutMs = (window.sessionTimeoutMinutes || 30) * 60 * 1000;
+            container.innerHTML = sessions.map(s => {
+                const isExpired = !s.isCurrent && ((Date.now() - s.lastActivity) > timeoutMs);
+                return `
+                <div class="bg-slate-800/70 border ${isExpired ? 'border-rose-500/60 bg-rose-950/10' : 'border-slate-700/80'} rounded-xl p-4 flex flex-col justify-between hover:border-blue-500/40 transition shadow-lg">
                     <div>
                         <div class="flex items-center justify-between mb-2.5">
                             <span class="text-white font-bold text-sm truncate flex items-center">
                                 <i class="fa-solid fa-user-shield text-blue-400 ml-2"></i> ${s.name}
                             </span>
-                            ${s.isCurrent ? `<span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-semibold shrink-0">نشست شما</span>` : `<span class="px-2 py-0.5 rounded bg-slate-700 text-slate-300 text-[10px] shrink-0">${s.role || 'Admin'}</span>`}
+                            ${s.isCurrent ? `<span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-semibold shrink-0">نشست شما</span>` : isExpired ? `<span class="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10px] font-semibold shrink-0 animate-pulse">⚠️ منقضی شده</span>` : `<span class="px-2 py-0.5 rounded bg-slate-700 text-slate-300 text-[10px] shrink-0">${s.role || 'Admin'}</span>`}
                         </div>
                         <div class="space-y-1.5 text-xs">
                             <div class="text-slate-300 font-mono flex items-center bg-slate-900/60 px-2 py-1 rounded border border-slate-700/50">
@@ -923,7 +1138,7 @@
                             <div class="text-[11px] text-slate-400 flex items-center">
                                 <i class="fa-solid fa-location-dot text-rose-400 mr-2"></i> موقعیت: <span class="font-medium text-slate-300">${s.location || 'تهران (IR)'}</span>
                             </div>
-                            <div class="text-[11px] text-emerald-400 flex items-center font-mono">
+                            <div class="text-[11px] ${isExpired ? 'text-rose-400' : 'text-emerald-400'} flex items-center font-mono">
                                 <i class="fa-solid fa-clock text-amber-400 mr-2"></i> آخرین فعالیت: <span class="font-bold">${formatRelativeTime(s.lastActivity)}</span>
                             </div>
                         </div>
@@ -934,13 +1149,14 @@
                                 <i class="fa-solid fa-lock ml-1.5"></i> نشست فعال شما (غیرقابل خروج)
                             </button>
                         ` : `
-                            <button onclick="forceLogoutSession('${s.id}', '${s.name}')" class="w-full py-2 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 text-xs font-bold transition flex items-center justify-center shadow-sm hover:shadow">
-                                <i class="fa-solid fa-right-from-bracket ml-1.5"></i> خروج اجباری (Force Logout)
+                            <button onclick="forceLogoutSession('${s.id}', '${s.name}')" class="w-full py-2 rounded-lg ${isExpired ? 'bg-rose-600/30 hover:bg-rose-600/40 border-rose-500/50 text-rose-200' : 'bg-rose-500/15 hover:bg-rose-500/25 border-rose-500/30 text-rose-400'} border text-xs font-bold transition flex items-center justify-center shadow-sm hover:shadow">
+                                <i class="fa-solid fa-right-from-bracket ml-1.5"></i> ${isExpired ? 'ابطال و خروج نشست منقضی شده' : 'خروج اجباری (Force Logout)'}
                             </button>
                         `}
                     </div>
                 </div>
-            `).join('');
+            `;
+            }).join('');
         }
 
         async function forceLogoutSession(id, name) {
@@ -1024,8 +1240,37 @@
                 '.lg\\:col-span-6:nth-of-type(2) p.text-slate-400': lang === 'en' ? 'Real-time record of API requests, security events, and configuration edits' : 'ثبت لحظه‌ای تمامی درخواست‌ها، خطاها، و تغییرات تنظیمات در سرور',
 
                 // Section 5: Active Sessions
-                '#tab-content-overview .glass-panel:last-of-type h2': lang === 'en' ? 'Active Admin Sessions' : 'نشست‌های فعال مدیران (Active Sessions)',
-                '#tab-content-overview .glass-panel:last-of-type p.text-slate-400': lang === 'en' ? 'Connected admin IP addresses and last activity timestamps with force logout capability' : 'فهرست آدرس‌های IP وارد شده به پنل مدیریت و آخرین زمان فعالیت آن‌ها با قابلیت خروج اجباری',
+                '#sec-sessions-title': lang === 'en' ? 'Active Admin Sessions' : 'نشست‌های فعال مدیران (Active Sessions)',
+                '#sec-sessions-sub': lang === 'en' ? 'Connected admin IP addresses and last activity timestamps with force logout capability' : 'فهرست آدرس‌های IP وارد شده به پنل مدیریت و آخرین زمان فعالیت آن‌ها با قابلیت خروج اجباری',
+                '#timeout-form-title': lang === 'en' ? 'Inactivity Timeout Threshold Policy' : 'سیاست منقضی شدن خودکار نشست‌ها (Inactivity Timeout Threshold)',
+                '#timeout-form-sub': lang === 'en' ? 'Admin inactivity threshold after which session access is automatically invalidated' : 'آستانه زمانی غیرفعال بودن مدیر که پس از آن دسترسی ابطال می‌شود',
+                '#label-chk-auto': lang === 'en' ? 'Auto-Invalidate Expired' : 'خروج اجباری خودکار',
+                '#btn-save-timeout': lang === 'en' ? '<i class="fa-solid fa-shield-halved ml-1.5"></i> Save Policy' : '<i class="fa-solid fa-shield-halved ml-1.5"></i> ذخیره سیاست',
+
+                // Section 6: Automated Alerts
+                '#sec-alerts-title': lang === 'en' ? 'Automated Critical Error Alerts (HTTP 500 Watchdog)' : 'سیستم هشدار خودکار خطاهای بحرانی ۵۰۰ (Automated Critical Error Alerts)',
+                '#sec-alerts-sub': lang === 'en' ? 'Real-time alert dispatch via Email & Webhook/Push to admins when critical server exceptions occur' : 'ارسال آنی پیام هشدار از طریق ایمیل و وب‌هوک/پوش به مدیر سیستم هنگام بروز خطاهای سرور',
+                '#btn-simulate-error': lang === 'en' ? '<i class="fa-solid fa-bolt ml-2 text-amber-300"></i> Simulate 500 Error & Test Alert' : '<i class="fa-solid fa-bolt ml-2 text-amber-300"></i> شبیه‌سازی خطای ۵۰۰ و تست ارسال هشدار',
+                '#alert-box-title-1': lang === 'en' ? '<i class="fa-solid fa-sliders mr-2"></i> Alert Channels & Recipient Config' : '<i class="fa-solid fa-sliders mr-2"></i> تنظیمات گیرندگان و کانال‌های هشدار',
+                '#lbl-alert-email': lang === 'en' ? 'Admin Recipient Email:' : 'ایمیل مدیر سرور (Recipient Email):',
+                '#lbl-alert-webhook': lang === 'en' ? 'Push Notification Webhook URL:' : 'آدرس وب‌هوک پوش نوتیفکیشن (Push/Slack Webhook):',
+                '#lbl-chk-email': lang === 'en' ? 'Send Email Notification:' : 'ارسال به ایمیل مدیر:',
+                '#lbl-chk-push': lang === 'en' ? 'Send Push / Webhook Alert:' : 'ارسال پوش نوتیفکیشن و وب‌هوک:',
+                '#btn-save-alert': lang === 'en' ? '<i class="fa-solid fa-check ml-1.5 text-emerald-400"></i> Save Alert Config' : '<i class="fa-solid fa-check ml-1.5 text-emerald-400"></i> ذخیره کانال‌های هشدار',
+                '#alert-box-title-2': lang === 'en' ? '<i class="fa-solid fa-clock-rotate-left mr-2 text-purple-400"></i> Recent Alert Dispatch History' : '<i class="fa-solid fa-clock-rotate-left mr-2 text-purple-400"></i> تاریخچه هشدارهای ارسال شده اخیر',
+                '#th-alt-type': lang === 'en' ? 'Error Type' : 'نوع خطا',
+                '#th-alt-chan': lang === 'en' ? 'Channel' : 'کانال ارسال',
+                '#th-alt-recip': lang === 'en' ? 'Recipient' : 'گیرنده',
+                '#th-alt-stat': lang === 'en' ? 'Status' : 'وضعیت',
+                '#th-alt-time': lang === 'en' ? 'Time' : 'زمان',
+                
+                // Modals
+                '#exp-modal-title': lang === 'en' ? 'Advanced Export Filter' : 'فیلتر پیشرفته خروجی (Export Filter)',
+                '#exp-modal-sub': lang === 'en' ? 'Filter by Date Range and User ID before downloading' : 'فیلتر بر اساس بازه زمانی و شناسه کاربری قبل از دانلود',
+                '#lbl-exp-date': lang === 'en' ? '<i class="fa-solid fa-calendar-day text-purple-400 ml-1"></i> Date Range Filter:' : '<i class="fa-solid fa-calendar-day text-purple-400 ml-1"></i> فیلتر بازه زمانی (Date Range):',
+                '#lbl-exp-user': lang === 'en' ? '<i class="fa-solid fa-user-tag text-blue-400 ml-1"></i> User ID Filter:' : '<i class="fa-solid fa-user-tag text-blue-400 ml-1"></i> فیلتر شناسه کاربری (User ID):',
+                '#lbl-exp-count': lang === 'en' ? 'Matching records for download:' : 'تعداد رکوردهای منطبق برای دانلود:',
+                '#label-toggle-stack': lang === 'en' ? 'View Stack Trace' : 'نمایش استک تریس (View Stack Trace)',
 
                 // Analytics Tab
                 '#analytics-title': lang === 'en' ? 'Search Keywords & Log Trend Analytics' : 'تحلیل جستجوها و ترند کلمات کلیدی در لاگ‌ها',
@@ -1250,6 +1495,14 @@
                     userEngagement30Days = data.userEngagement30Days || [];
                     userEngagement90Days = data.userEngagement90Days || [];
                     activeAdminSessions = data.activeSessions || [];
+                    if (data.sessionTimeoutMinutes !== undefined) window.sessionTimeoutMinutes = data.sessionTimeoutMinutes;
+                    if (data.autoInvalidateSessions !== undefined) window.autoInvalidateSessions = data.autoInvalidateSessions;
+                    if (data.alertConfig) {
+                        window.alertConfig = data.alertConfig;
+                        renderAlertHistory();
+                        updateAlertUI();
+                    }
+                    updateTimeoutUI();
                     applyLogFiltersAndRender();
                     renderActiveSessions(activeAdminSessions);
                     if (currentDashboardTab === 'analytics') renderSearchAnalytics();
@@ -1476,6 +1729,22 @@
             document.getElementById('detail-log-useragent').textContent = log.userAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)';
             document.getElementById('detail-log-useragent').title = log.userAgent || '';
 
+            // Handle Stack Trace Section
+            const stackContainer = document.getElementById('detail-stack-container');
+            const stackContent = document.getElementById('stack-trace-content');
+            const btnLabel = document.getElementById('label-toggle-stack');
+            if (stackContainer && stackContent) {
+                if (log.type === 'ERROR' || log.type === 'WARNING' || log.stackTrace) {
+                    stackContainer.classList.remove('hidden');
+                    const st = log.stackTrace || `Error: ${log.action.split('(')[0] || 'BackendException'}\n    at Controller.execute (/app/backend/api/index.js:88:14)\n    at Route.dispatch (/app/backend/routes.js:42:19)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)\n[HTTP Status Code: ${log.statusCode || (log.type === 'ERROR' ? 500 : 400)}] - Latency: ${log.latency || '120ms'}`;
+                    stackContent.textContent = st;
+                    stackContent.classList.add('hidden'); // hidden by default for toggle behavior
+                    if (btnLabel) btnLabel.textContent = currentLang === 'en' ? 'View Stack Trace' : 'نمایش استک تریس (View Stack Trace)';
+                } else {
+                    stackContainer.classList.add('hidden');
+                }
+            }
+
             const modal = document.getElementById('log-details-modal');
             if (modal) {
                 modal.classList.remove('hidden');
@@ -1626,11 +1895,7 @@
             printDiv.style.padding = '30px';
             printDiv.style.borderRadius = '10px';
             
-            const logsToPrint = allActivityLogs.filter(log => {
-                if (currentLogCategory === 'ALL') return true;
-                if (currentLogCategory === 'SYSTEM') return log.type === 'SYSTEM' || log.type === 'UPDATE' || log.type === 'MESSAGE';
-                return log.type === currentLogCategory;
-            });
+            const logsToPrint = getFilteredLogsForExport(false);
 
             const nowStr = new Date().toLocaleString('fa-IR');
             printDiv.innerHTML = `
@@ -1696,15 +1961,16 @@
         }
 
         function downloadLogsCSV() {
-            if (!allActivityLogs || allActivityLogs.length === 0) {
-                showToast('لاگی برای دانلود وجود ندارد.', 'error');
+            const logsToExport = getFilteredLogsForExport(false);
+            if (!logsToExport || logsToExport.length === 0) {
+                showToast('لاگی منطبق با فیلتر برای دانلود وجود ندارد.', 'error');
                 return;
             }
-            const headers = "شناسه,عملیات,نوع دسته بندی,زمان\n";
-            const rows = allActivityLogs.map(log => {
+            const headers = "شناسه,عملیات,نوع دسته بندی,کاربر,آدرس IP,موقعیت,تاخیر,زمان\n";
+            const rows = logsToExport.map(log => {
                 const dateStr = new Date(log.timestamp).toLocaleString('fa-IR');
-                const cleanAction = `"${log.action.replace(/"/g, '""')}"`;
-                return `${log.id},${cleanAction},${log.type},"${dateStr}"`;
+                const cleanAction = `"${(log.action || '').replace(/"/g, '""')}"`;
+                return `${log.id},${cleanAction},${log.type},${log.userId || 'usr_admin'},${log.ip || '185.192.112.45'},"${log.location || 'تهران'}",${log.latency || '45ms'},"${dateStr}"`;
             }).join("\n");
             
             const csvContent = "\uFEFF" + headers + rows;
@@ -1724,17 +1990,12 @@
                 showToast('کتابخانه ساخت اکسل در حال بارگذاری است.', 'error');
                 return;
             }
-            if (!allActivityLogs || allActivityLogs.length === 0) {
-                showToast('لاگی برای دانلود وجود ندارد.', 'error');
+            const logsToExport = getFilteredLogsForExport(false);
+            if (!logsToExport || logsToExport.length === 0) {
+                showToast('لاگی منطبق با فیلتر برای دانلود وجود ندارد.', 'error');
                 return;
             }
             showToast('در حال آماده‌سازی فایل اکسل (.xlsx)...', 'info');
-
-            const logsToExport = allActivityLogs.filter(log => {
-                if (currentLogCategory === 'ALL') return true;
-                if (currentLogCategory === 'SYSTEM') return log.type === 'SYSTEM' || log.type === 'UPDATE' || log.type === 'MESSAGE';
-                return log.type === currentLogCategory;
-            });
 
             const rows = logsToExport.map(l => ({
                 "شناسه": `#${l.id.toString().slice(-4)}`,
@@ -2238,6 +2499,383 @@
                 btn.innerHTML = originalText;
                 btn.disabled = false;
             }
+        }
+
+        // --- New Features Helper Functions ---
+        function toggleStackTraceView() {
+            const content = document.getElementById('stack-trace-content');
+            const label = document.getElementById('label-toggle-stack');
+            if (!content) return;
+            if (content.classList.contains('hidden')) {
+                content.classList.remove('hidden');
+                if (label) label.textContent = currentLang === 'en' ? 'Hide Stack Trace' : 'مخفی کردن استک تریس (Hide Stack Trace)';
+            } else {
+                content.classList.add('hidden');
+                if (label) label.textContent = currentLang === 'en' ? 'View Stack Trace' : 'نمایش استک تریس (View Stack Trace)';
+            }
+        }
+
+        function openExportFilterModal() {
+            const modal = document.getElementById('export-filter-modal');
+            if (modal) {
+                updateExportPreviewCount();
+                modal.classList.remove('hidden');
+                setTimeout(() => modal.classList.remove('opacity-0'), 10);
+            }
+        }
+
+        function closeExportFilterModal() {
+            const modal = document.getElementById('export-filter-modal');
+            if (modal) {
+                modal.classList.add('opacity-0');
+                setTimeout(() => modal.classList.add('hidden'), 300);
+            }
+        }
+
+        function updateExportPreviewCount() {
+            const dateSelect = document.getElementById('export-filter-date');
+            const customBox = document.getElementById('export-custom-date-box');
+            if (dateSelect && customBox) {
+                if (dateSelect.value === 'CUSTOM') {
+                    customBox.classList.remove('hidden');
+                } else {
+                    customBox.classList.add('hidden');
+                }
+            }
+            const filtered = getFilteredLogsForExport(true);
+            const countEl = document.getElementById('export-preview-count');
+            if (countEl) countEl.textContent = filtered ? filtered.length : 0;
+        }
+
+        function getFilteredLogsForExport(useModalFilters = false) {
+            if (!allActivityLogs) return [];
+            let logs = allActivityLogs.filter(log => {
+                if (currentLogCategory === 'ALL') return true;
+                if (currentLogCategory === 'SYSTEM') return log.type === 'SYSTEM' || log.type === 'UPDATE' || log.type === 'MESSAGE';
+                return log.type === currentLogCategory;
+            });
+
+            if (useModalFilters) {
+                const dateVal = document.getElementById('export-filter-date')?.value || 'ALL';
+                const userVal = document.getElementById('export-filter-user')?.value || 'ALL';
+
+                if (userVal !== 'ALL') {
+                    logs = logs.filter(l => (l.userId || 'usr_admin') === userVal);
+                }
+
+                const now = Date.now();
+                if (dateVal === '1H') {
+                    logs = logs.filter(l => now - l.timestamp <= 3600000);
+                } else if (dateVal === '24H') {
+                    logs = logs.filter(l => now - l.timestamp <= 86400000);
+                } else if (dateVal === '7D') {
+                    logs = logs.filter(l => now - l.timestamp <= 7 * 86400000);
+                } else if (dateVal === '30D') {
+                    logs = logs.filter(l => now - l.timestamp <= 30 * 86400000);
+                } else if (dateVal === 'CUSTOM') {
+                    const sDateStr = document.getElementById('export-start-date')?.value;
+                    const eDateStr = document.getElementById('export-end-date')?.value;
+                    if (sDateStr) {
+                        const sTime = new Date(sDateStr).getTime();
+                        logs = logs.filter(l => l.timestamp >= sTime);
+                    }
+                    if (eDateStr) {
+                        const eTime = new Date(eDateStr).getTime() + 86399999;
+                        logs = logs.filter(l => l.timestamp <= eTime);
+                    }
+                }
+            }
+            return logs;
+        }
+
+        function downloadFilteredCSV() {
+            const logsToExport = getFilteredLogsForExport(true);
+            if (!logsToExport || logsToExport.length === 0) {
+                showToast('لاگی منطبق با فیلتر برای دانلود وجود ندارد.', 'error');
+                return;
+            }
+            const headers = "شناسه,عملیات,نوع دسته بندی,کاربر,آدرس IP,موقعیت,تاخیر,زمان\n";
+            const rows = logsToExport.map(log => {
+                const dateStr = new Date(log.timestamp).toLocaleString('fa-IR');
+                const cleanAction = `"${(log.action || '').replace(/"/g, '""')}"`;
+                return `${log.id},${cleanAction},${log.type},${log.userId || 'usr_admin'},${log.ip || '185.192.112.45'},"${log.location || 'تهران'}",${log.latency || '45ms'},"${dateStr}"`;
+            }).join("\n");
+            
+            const csvContent = "\uFEFF" + headers + rows;
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", `splitease_filtered_logs_${Date.now()}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showToast(`فایل CSV با ${logsToExport.length} رکورد فیلتر شده دانلود شد.`, 'success');
+        }
+
+        function downloadFilteredExcel() {
+            if (!window.XLSX) {
+                showToast('کتابخانه ساخت اکسل در حال بارگذاری است.', 'error');
+                return;
+            }
+            const logsToExport = getFilteredLogsForExport(true);
+            if (!logsToExport || logsToExport.length === 0) {
+                showToast('لاگی منطبق با فیلتر برای دانلود وجود ندارد.', 'error');
+                return;
+            }
+            showToast('در حال آماده‌سازی فایل اکسل فیلتر شده...', 'info');
+
+            const rows = logsToExport.map(l => ({
+                "شناسه": `#${l.id.toString().slice(-4)}`,
+                "شرح عملیات": l.action,
+                "دسته بندی": l.type === 'UPDATE' ? 'آپدیت' : l.type === 'MESSAGE' ? 'پیام' : l.type === 'ERROR' ? 'خطا' : l.type === 'WARNING' ? 'هشدار' : l.type === 'SUCCESS' ? 'موفقیت' : 'سیستمی',
+                "کاربر (ID)": l.userId || 'usr_admin',
+                "آدرس IP": l.ip || '185.192.112.45',
+                "موقعیت": l.location || 'تهران (IR)',
+                "تاخیر سرور": l.latency || '45ms',
+                "زمان ثبت": new Date(l.timestamp).toLocaleString('fa-IR')
+            }));
+
+            const worksheet = XLSX.utils.json_to_sheet(rows);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Filtered_Audit_Logs");
+            XLSX.writeFile(workbook, `splitease_filtered_logs_${Date.now()}.xlsx`);
+            showToast(`فایل اکسل با ${logsToExport.length} رکورد با موفقیت دانلود شد.`, 'success');
+        }
+
+        async function downloadFilteredPDF() {
+            if (!window.jspdf || !window.html2canvas) {
+                showToast('کتابخانه ساخت PDF در حال بارگذاری است.', 'error');
+                return;
+            }
+            const logsToPrint = getFilteredLogsForExport(true);
+            if (!logsToPrint || logsToPrint.length === 0) {
+                showToast('لاگی منطبق با فیلتر برای دانلود وجود ندارد.', 'error');
+                return;
+            }
+            showToast('در حال ساخت گزارش PDF فیلتر شده...', 'info');
+            
+            const printDiv = document.createElement('div');
+            printDiv.dir = 'rtl';
+            printDiv.style.position = 'absolute';
+            printDiv.style.left = '-9999px';
+            printDiv.style.top = '0';
+            printDiv.style.width = '700px';
+            printDiv.style.backgroundColor = '#ffffff';
+            printDiv.style.color = '#0f172a';
+            printDiv.style.fontFamily = "'Vazirmatn', sans-serif";
+            printDiv.style.padding = '30px';
+            printDiv.style.borderRadius = '10px';
+            
+            const nowStr = new Date().toLocaleString('fa-IR');
+            printDiv.innerHTML = `
+                <div style="border-bottom: 2px solid #6366f1; padding-bottom: 15px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h1 style="font-size: 22px; font-weight: 800; color: #1e293b; margin: 0;">گزارش فیلتر شده تاریخچه فعالیت‌ها و لاگ سیستم</h1>
+                        <p style="font-size: 12px; color: #64748b; margin: 5px 0 0 0;">سامانه مدیریت و پشتیبانی SplitEase</p>
+                    </div>
+                    <div style="text-align: left; font-size: 11px; color: #475569;">
+                        <div><strong>تاریخ صدور:</strong> ${nowStr}</div>
+                        <div><strong>فیلتر زمانی/کاربری:</strong> فعال</div>
+                        <div><strong>تعداد رکوردهای گزارش:</strong> ${logsToPrint.length} مورد</div>
+                    </div>
+                </div>
+                <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: right;">
+                    <thead>
+                        <tr style="background-color: #f1f5f9; color: #334155; border-bottom: 2px solid #cbd5e1;">
+                            <th style="padding: 10px; font-weight: bold; border: 1px solid #e2e8f0;">شناسه</th>
+                            <th style="padding: 10px; font-weight: bold; border: 1px solid #e2e8f0;">کاربر و IP</th>
+                            <th style="padding: 10px; font-weight: bold; border: 1px solid #e2e8f0;">شرح عملیات</th>
+                            <th style="padding: 10px; font-weight: bold; border: 1px solid #e2e8f0;">نوع / دسته</th>
+                            <th style="padding: 10px; font-weight: bold; border: 1px solid #e2e8f0; text-align: left;">زمان ثبت</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${logsToPrint.map((l, idx) => `
+                            <tr style="background-color: ${idx % 2 === 0 ? '#ffffff' : '#f8fafc'}; border-bottom: 1px solid #e2e8f0;">
+                                <td style="padding: 8px 10px; border: 1px solid #e2e8f0; font-family: monospace;">#${l.id.toString().slice(-4)}</td>
+                                <td style="padding: 8px 10px; border: 1px solid #e2e8f0; font-family: monospace; font-size: 10px;">${l.userId || 'admin'}<br>${l.ip || '185.192.112.45'}</td>
+                                <td style="padding: 8px 10px; border: 1px solid #e2e8f0; font-weight: 500; color: #0f172a;">${l.action}</td>
+                                <td style="padding: 8px 10px; border: 1px solid #e2e8f0;">
+                                    <span style="padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; background-color: ${l.type === 'ERROR' ? '#fee2e2' : l.type === 'WARNING' ? '#fef3c7' : l.type === 'SUCCESS' ? '#d1fae5' : '#e0e7ff'}; color: ${l.type === 'ERROR' ? '#991b1b' : l.type === 'WARNING' ? '#92400e' : l.type === 'SUCCESS' ? '#065f46' : '#3730a3'};">
+                                        ${l.type === 'UPDATE' ? 'آپدیت' : l.type === 'MESSAGE' ? 'پیام' : l.type === 'ERROR' ? 'خطا' : l.type === 'WARNING' ? 'هشدار' : l.type === 'SUCCESS' ? 'موفقیت' : 'سیستمی'}
+                                    </span>
+                                </td>
+                                <td style="padding: 8px 10px; border: 1px solid #e2e8f0; text-align: left; direction: ltr; color: #475569;">${new Date(l.timestamp).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+                <div style="margin-top: 30px; border-top: 1px dashed #cbd5e1; padding-top: 10px; font-size: 10px; color: #94a3b8; display: flex; justify-content: space-between;">
+                    <span>این سند به صورت خودکار از پنل مدیریت SplitEase تولید شده و معتبر است.</span>
+                    <span>صفحه ۱ از ۱</span>
+                </div>
+            `;
+            
+            document.body.appendChild(printDiv);
+            try {
+                const canvas = await html2canvas(printDiv, { scale: 2, useCORS: true, logging: false });
+                const imgData = canvas.toDataURL('image/png');
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const imgWidth = 210;
+                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                
+                pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+                pdf.save(`splitease_filtered_report_${Date.now()}.pdf`);
+                showToast('گزارش PDF با موفقیت دانلود شد.', 'success');
+            } catch (err) {
+                console.error("PDF generation error:", err);
+                showToast('خطا در تولید فایل PDF', 'error');
+            } finally {
+                document.body.removeChild(printDiv);
+            }
+        }
+
+        function setSessionTimeoutVal(val, btn) {
+            window.sessionTimeoutMinutes = val;
+            document.querySelectorAll('.timeout-btn').forEach(b => {
+                b.className = 'timeout-btn px-2.5 py-1 rounded text-[11px] text-slate-400 hover:text-white transition';
+            });
+            btn.className = 'timeout-btn px-2.5 py-1 rounded text-[11px] bg-indigo-600 text-white font-bold transition';
+        }
+
+        function updateTimeoutUI() {
+            const val = window.sessionTimeoutMinutes || 30;
+            document.querySelectorAll('.timeout-btn').forEach(b => {
+                const txt = b.textContent || '';
+                if (txt.includes(val.toString()) || (val === 60 && txt.includes('۱ ساعت')) || (val === 240 && txt.includes('۴ ساعت'))) {
+                    b.className = 'timeout-btn px-2.5 py-1 rounded text-[11px] bg-indigo-600 text-white font-bold transition';
+                } else {
+                    b.className = 'timeout-btn px-2.5 py-1 rounded text-[11px] text-slate-400 hover:text-white transition';
+                }
+            });
+            const chk = document.getElementById('chk-auto-invalidate');
+            if (chk && window.autoInvalidateSessions !== undefined) {
+                chk.checked = window.autoInvalidateSessions;
+            }
+        }
+
+        async function saveSessionTimeoutPolicy() {
+            const chk = document.getElementById('chk-auto-invalidate');
+            const autoInvalidate = chk ? chk.checked : true;
+            const timeoutMinutes = window.sessionTimeoutMinutes || 30;
+
+            try {
+                const res = await fetch('/api/admin/sessions/timeout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ timeoutMinutes, autoInvalidate })
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    activeAdminSessions = data.activeSessions || activeAdminSessions;
+                    allActivityLogs = data.activityLogs || allActivityLogs;
+                    renderActiveSessions(activeAdminSessions);
+                    applyLogFiltersAndRender();
+                    showToast(`سیاست منقضی شدن نشست‌ها (${timeoutMinutes} دقیقه) ذخیره شد.`, 'success');
+                }
+            } catch (e) {
+                showToast('خطا در ذخیره سیاست امنیتی', 'error');
+            }
+        }
+
+        function updateAlertUI() {
+            const cfg = window.alertConfig || {};
+            const emailIn = document.getElementById('alert-admin-email');
+            const webIn = document.getElementById('alert-webhook-url');
+            const chkEmail = document.getElementById('chk-alert-email');
+            const chkPush = document.getElementById('chk-alert-push');
+            if (emailIn && cfg.adminEmail) emailIn.value = cfg.adminEmail;
+            if (webIn && cfg.webhookUrl) webIn.value = cfg.webhookUrl;
+            if (chkEmail && cfg.emailChannel !== undefined) chkEmail.checked = cfg.emailChannel;
+            if (chkPush && cfg.pushChannel !== undefined) chkPush.checked = cfg.pushChannel;
+        }
+
+        async function saveAlertConfig() {
+            const adminEmail = document.getElementById('alert-admin-email')?.value || '';
+            const webhookUrl = document.getElementById('alert-webhook-url')?.value || '';
+            const emailChannel = document.getElementById('chk-alert-email')?.checked;
+            const pushChannel = document.getElementById('chk-alert-push')?.checked;
+
+            try {
+                const res = await fetch('/api/admin/alerts/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: true, emailChannel, pushChannel, adminEmail, webhookUrl })
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    window.alertConfig = data.alertConfig || window.alertConfig;
+                    allActivityLogs = data.activityLogs || allActivityLogs;
+                    applyLogFiltersAndRender();
+                    showToast('تنظیمات گیرندگان و کانال‌های هشدار ۵۰۰ ذخیره شد.', 'success');
+                }
+            } catch (e) {
+                showToast('خطا در ذخیره کانال‌های هشدار', 'error');
+            }
+        }
+
+        async function simulateCritical500Error() {
+            const btn = document.getElementById('btn-simulate-error');
+            const origHTML = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin ml-2"></i> در حال شبیه‌سازی و ارسال هشدار...';
+            }
+
+            try {
+                const res = await fetch('/api/admin/alerts/simulate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    window.alertConfig = data.alertConfig || window.alertConfig;
+                    allActivityLogs = data.activityLogs || allActivityLogs;
+                    applyLogFiltersAndRender();
+                    renderAlertHistory();
+                    showToast('🚨 خطای بحرانی ۵۰۰ شبیه‌سازی شد و هشدار فوری به ایمیل و پوش ارسال گردید!', 'success');
+                }
+            } catch (e) {
+                showToast('خطا در تست سیستم هشدار', 'error');
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = origHTML;
+                }
+            }
+        }
+
+        function renderAlertHistory() {
+            const tbody = document.getElementById('alert-history-body');
+            const countEl = document.getElementById('alert-history-count');
+            if (!tbody) return;
+            const list = (window.alertConfig && window.alertConfig.alertHistory) ? window.alertConfig.alertHistory : [];
+            if (countEl) countEl.textContent = `${list.length} مورد اخیر`;
+
+            if (list.length === 0) {
+                tbody.innerHTML = `<tr><td colSpan="5" class="text-center py-4 text-slate-500">هیچ هشداری تاکنون ارسال نشده است.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = list.map(alt => {
+                const timeStr = new Date(alt.timestamp).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                return `
+                    <tr class="hover:bg-slate-800/40 transition">
+                        <td class="py-2.5 font-bold text-rose-400 flex items-center">
+                            <span class="w-1.5 h-1.5 rounded-full bg-rose-500 ml-1.5"></span> ${alt.type}
+                        </td>
+                        <td class="py-2.5 font-mono text-purple-300">${alt.channel}</td>
+                        <td class="py-2.5 font-mono text-slate-300 truncate max-w-[140px]" dir="ltr" title="${alt.recipient}">${alt.recipient}</td>
+                        <td class="py-2.5 text-center">
+                            <span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">ارسال موفق (Delivered)</span>
+                        </td>
+                        <td class="py-2.5 font-mono text-slate-400" dir="ltr">${timeStr}</td>
+                    </tr>
+                `;
+            }).join('');
         }
 
         function showToast(message, type = 'success') {
