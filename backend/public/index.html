@@ -8,6 +8,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -410,7 +412,16 @@
                             <p class="text-xs text-slate-400">آخرین تغییرات، هشدارها و عملیات ثبت شده در سرور</p>
                         </div>
                     </div>
-                    <span class="text-xs font-medium px-2.5 py-1 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Audit Trail</span>
+                    <div class="flex items-center space-x-2 space-x-reverse">
+                        <label class="flex items-center cursor-pointer space-x-1.5 space-x-reverse bg-slate-800/90 px-2.5 py-1 rounded-xl border border-slate-700/80 hover:bg-slate-700 transition" title="بروزرسانی خودکار هر ۳۰ ثانیه">
+                            <input type="checkbox" id="auto-refresh-toggle" onchange="toggleAutoRefresh(this.checked)" class="sr-only peer">
+                            <div class="w-7 h-4 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500 relative"></div>
+                            <span class="text-[11px] text-slate-300 font-medium select-none flex items-center">
+                                <i class="fa-solid fa-rotate mr-1 text-[10px] text-emerald-400" id="auto-refresh-icon"></i> ۳۰ ثانیه
+                            </span>
+                        </label>
+                        <span class="text-xs font-medium px-2.5 py-1 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Audit Trail</span>
+                    </div>
                 </div>
 
                 <!-- Log Filter Chips and Actions -->
@@ -423,12 +434,18 @@
                         <button onclick="filterLogCategory('SUCCESS', this)" class="log-filter-btn px-2 py-1 rounded bg-slate-700/50 text-slate-400 hover:text-white transition text-[11px]">موفقیت</button>
                         <button onclick="filterLogCategory('SYSTEM', this)" class="log-filter-btn px-2 py-1 rounded bg-slate-700/50 text-slate-400 hover:text-white transition text-[11px]">سیستمی</button>
                     </div>
-                    <div class="flex items-center space-x-2 space-x-reverse">
+                    <div class="flex items-center space-x-1.5 space-x-reverse">
+                        <button id="bulk-delete-btn" onclick="deleteSelectedLogs()" class="hidden px-2.5 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-[11px] items-center transition font-bold animate-pulse" title="حذف موارد تیک‌خورده">
+                            <i class="fa-solid fa-check-double ml-1 text-sm"></i> حذف (<span id="selected-count">0</span>)
+                        </button>
+                        <button onclick="downloadLogsPDF()" class="px-2.5 py-1 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/20 text-[11px] flex items-center transition" title="خروجی گزارش PDF">
+                            <i class="fa-solid fa-file-pdf ml-1 text-sm"></i> دانلود PDF
+                        </button>
                         <button onclick="downloadLogsCSV()" class="px-2.5 py-1 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 text-[11px] flex items-center transition" title="دانلود آفلاین فایل CSV">
-                            <i class="fa-solid fa-file-csv ml-1.5 text-sm"></i> دانلود CSV
+                            <i class="fa-solid fa-file-csv ml-1 text-sm"></i> دانلود CSV
                         </button>
                         <button onclick="openClearLogsModal()" class="px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 text-[11px] flex items-center transition" title="حذف تاریخچه">
-                            <i class="fa-solid fa-trash-can ml-1.5 text-sm"></i> پاکسازی تاریخچه
+                            <i class="fa-solid fa-trash-can ml-1 text-sm"></i> پاکسازی
                         </button>
                     </div>
                 </div>
@@ -437,6 +454,9 @@
                     <table class="w-full text-right text-xs">
                         <thead>
                             <tr class="border-b border-slate-700/80 text-slate-400 pb-2">
+                                <th class="pb-2 font-semibold w-8 text-center">
+                                    <input type="checkbox" id="select-all-logs" onchange="toggleSelectAllLogs(this.checked)" class="rounded bg-slate-800 border-slate-600 text-emerald-500 focus:ring-0 cursor-pointer">
+                                </th>
                                 <th class="pb-2 font-semibold">عملیات و وضعیت</th>
                                 <th class="pb-2 font-semibold w-24">دسته بندی</th>
                                 <th class="pb-2 font-semibold w-24 text-left">زمان</th>
@@ -486,6 +506,8 @@
         let userEngagement30Days = [];
         let userEngagement90Days = [];
         let currentLogCategory = 'ALL';
+        let selectedLogIds = new Set();
+        let autoRefreshInterval = null;
 
         // Initialize and Load Data
         document.addEventListener('DOMContentLoaded', () => {
@@ -510,7 +532,7 @@
             }
         }
 
-        async function fetchStats() {
+        async function fetchStats(isSilent = false) {
             try {
                 const res = await fetch('/api/admin/stats');
                 if (res.ok) {
@@ -520,10 +542,14 @@
                     userEngagement30Days = data.userEngagement30Days || [];
                     userEngagement90Days = data.userEngagement90Days || [];
                     filterLogCategory(currentLogCategory);
-                    renderChart(currentUserEngagement);
+                    if (!isSilent) {
+                        renderChart(currentUserEngagement);
+                    } else {
+                        updateBulkDeleteBtn();
+                    }
                 }
             } catch (err) {
-                console.error("Error fetching stats:", err);
+                if (!isSilent) console.error("Error fetching stats:", err);
             }
         }
 
@@ -594,6 +620,169 @@
                     btn.innerHTML = '<i class="fa-solid fa-trash-can ml-2"></i> بله، پاکسازی شود';
                 }
                 closeClearLogsModal();
+            }
+        }
+
+        function toggleAutoRefresh(enabled) {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+            }
+            const icon = document.getElementById('auto-refresh-icon');
+            if (enabled) {
+                if (icon) icon.classList.add('animate-spin');
+                showToast('بروزرسانی خودکار لاگ‌ها (هر ۳۰ ثانیه) فعال شد.', 'info');
+                autoRefreshInterval = setInterval(() => {
+                    fetchStats(true);
+                }, 30000);
+            } else {
+                if (icon) icon.classList.remove('animate-spin');
+                showToast('بروزرسانی خودکار غیرفعال شد.', 'info');
+            }
+        }
+
+        function toggleSelectLog(id, checked) {
+            if (checked) selectedLogIds.add(id);
+            else selectedLogIds.delete(id);
+            updateBulkDeleteBtn();
+        }
+
+        function toggleSelectAllLogs(checked) {
+            const checkboxes = document.querySelectorAll('.log-checkbox');
+            checkboxes.forEach(cb => {
+                cb.checked = checked;
+                const id = Number(cb.value);
+                if (checked) selectedLogIds.add(id);
+                else selectedLogIds.delete(id);
+            });
+            updateBulkDeleteBtn();
+        }
+
+        function updateBulkDeleteBtn() {
+            const btn = document.getElementById('bulk-delete-btn');
+            const countSpan = document.getElementById('selected-count');
+            const selectAll = document.getElementById('select-all-logs');
+            if (!btn) return;
+            if (selectedLogIds.size > 0) {
+                btn.classList.remove('hidden');
+                btn.classList.add('flex');
+                if (countSpan) countSpan.textContent = selectedLogIds.size;
+            } else {
+                btn.classList.add('hidden');
+                btn.classList.remove('flex');
+                if (selectAll) selectAll.checked = false;
+            }
+        }
+
+        async function deleteSelectedLogs() {
+            if (selectedLogIds.size === 0) return;
+            const ids = Array.from(selectedLogIds);
+            if (!confirm(`آیا از حذف ${ids.length} مورد انتخاب شده اطمینان دارید؟`)) return;
+            
+            try {
+                const res = await fetch('/api/admin/logs/delete-bulk', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ids })
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    allActivityLogs = data.activityLogs || [];
+                    selectedLogIds.clear();
+                    updateBulkDeleteBtn();
+                    filterLogCategory(currentLogCategory);
+                    showToast('موارد انتخاب شده با موفقیت از تاریخچه حذف شدند.', 'success');
+                }
+            } catch (err) {
+                showToast('خطا در حذف موارد انتخاب شده.', 'error');
+            }
+        }
+
+        async function downloadLogsPDF() {
+            if (!window.jspdf || !window.html2canvas) {
+                showToast('کتابخانه ساخت PDF در حال بارگذاری است، لطفا چند لحظه دیگر تلاش کنید.', 'error');
+                return;
+            }
+            showToast('در حال ساخت گزارش PDF... لطفا شکیبا باشید.', 'info');
+            
+            const printDiv = document.createElement('div');
+            printDiv.dir = 'rtl';
+            printDiv.style.position = 'absolute';
+            printDiv.style.left = '-9999px';
+            printDiv.style.top = '0';
+            printDiv.style.width = '700px';
+            printDiv.style.backgroundColor = '#ffffff';
+            printDiv.style.color = '#0f172a';
+            printDiv.style.fontFamily = "'Vazirmatn', sans-serif";
+            printDiv.style.padding = '30px';
+            printDiv.style.borderRadius = '10px';
+            
+            const logsToPrint = allActivityLogs.filter(log => {
+                if (currentLogCategory === 'ALL') return true;
+                if (currentLogCategory === 'SYSTEM') return log.type === 'SYSTEM' || log.type === 'UPDATE' || log.type === 'MESSAGE';
+                return log.type === currentLogCategory;
+            });
+
+            const nowStr = new Date().toLocaleString('fa-IR');
+            printDiv.innerHTML = `
+                <div style="border-bottom: 2px solid #6366f1; padding-bottom: 15px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h1 style="font-size: 22px; font-weight: 800; color: #1e293b; margin: 0;">گزارش رسمی تاریخچه فعالیت‌ها و لاگ سیستم</h1>
+                        <p style="font-size: 12px; color: #64748b; margin: 5px 0 0 0;">سامانه مدیریت و پشتیبانی SplitEase</p>
+                    </div>
+                    <div style="text-align: left; font-size: 11px; color: #475569;">
+                        <div><strong>تاریخ صدور:</strong> ${nowStr}</div>
+                        <div><strong>فیلتر فعال:</strong> ${currentLogCategory === 'ALL' ? 'همه موارد' : currentLogCategory}</div>
+                        <div><strong>تعداد رکوردهای گزارش:</strong> ${logsToPrint.length} مورد</div>
+                    </div>
+                </div>
+                <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: right;">
+                    <thead>
+                        <tr style="background-color: #f1f5f9; color: #334155; border-bottom: 2px solid #cbd5e1;">
+                            <th style="padding: 10px; font-weight: bold; border: 1px solid #e2e8f0;">شناسه</th>
+                            <th style="padding: 10px; font-weight: bold; border: 1px solid #e2e8f0;">شرح عملیات و رویداد</th>
+                            <th style="padding: 10px; font-weight: bold; border: 1px solid #e2e8f0;">نوع / دسته</th>
+                            <th style="padding: 10px; font-weight: bold; border: 1px solid #e2e8f0; text-align: left;">زمان ثبت</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${logsToPrint.map((l, idx) => `
+                            <tr style="background-color: ${idx % 2 === 0 ? '#ffffff' : '#f8fafc'}; border-bottom: 1px solid #e2e8f0;">
+                                <td style="padding: 8px 10px; border: 1px solid #e2e8f0; font-family: monospace;">#${l.id.toString().slice(-4)}</td>
+                                <td style="padding: 8px 10px; border: 1px solid #e2e8f0; font-weight: 500; color: #0f172a;">${l.action}</td>
+                                <td style="padding: 8px 10px; border: 1px solid #e2e8f0;">
+                                    <span style="padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; background-color: ${l.type === 'ERROR' ? '#fee2e2' : l.type === 'WARNING' ? '#fef3c7' : l.type === 'SUCCESS' ? '#d1fae5' : '#e0e7ff'}; color: ${l.type === 'ERROR' ? '#991b1b' : l.type === 'WARNING' ? '#92400e' : l.type === 'SUCCESS' ? '#065f46' : '#3730a3'};">
+                                        ${l.type === 'UPDATE' ? 'آپدیت' : l.type === 'MESSAGE' ? 'پیام' : l.type === 'ERROR' ? 'خطا' : l.type === 'WARNING' ? 'هشدار' : l.type === 'SUCCESS' ? 'موفقیت' : 'سیستمی'}
+                                    </span>
+                                </td>
+                                <td style="padding: 8px 10px; border: 1px solid #e2e8f0; text-align: left; direction: ltr; color: #475569;">${new Date(l.timestamp).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+                <div style="margin-top: 30px; border-top: 1px dashed #cbd5e1; padding-top: 10px; font-size: 10px; color: #94a3b8; display: flex; justify-content: space-between;">
+                    <span>این سند به صورت خودکار از پنل مدیریت SplitEase تولید شده و معتبر است.</span>
+                    <span>صفحه ۱ از ۱</span>
+                </div>
+            `;
+            
+            document.body.appendChild(printDiv);
+            try {
+                const canvas = await html2canvas(printDiv, { scale: 2, useCORS: true, logging: false });
+                const imgData = canvas.toDataURL('image/png');
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const imgWidth = 210;
+                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                
+                pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+                pdf.save(`splitease_report_${Date.now()}.pdf`);
+                showToast('فایل گزارش PDF با موفقیت دانلود شد.', 'success');
+            } catch (err) {
+                console.error("PDF generation error:", err);
+                showToast('خطا در تولید فایل PDF', 'error');
+            } finally {
+                document.body.removeChild(printDiv);
             }
         }
 
@@ -672,7 +861,7 @@
             const tbody = document.getElementById('activity-logs-body');
             if (!tbody) return;
             if (logs.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="3" class="py-4 text-center text-slate-500">هیچ فعالیتی یافت نشد.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="4" class="py-4 text-center text-slate-500">هیچ فعالیتی یافت نشد.</td></tr>`;
                 return;
             }
             tbody.innerHTML = logs.map(log => {
@@ -693,6 +882,9 @@
                 }
                 return `
                     <tr class="hover:bg-slate-800/40 transition">
+                        <td class="py-2.5 text-center w-8">
+                            <input type="checkbox" value="${log.id}" onchange="toggleSelectLog(${log.id}, this.checked)" ${selectedLogIds.has(log.id) ? 'checked' : ''} class="log-checkbox rounded bg-slate-800 border-slate-600 text-emerald-500 focus:ring-0 cursor-pointer">
+                        </td>
                         <td class="py-2.5 font-medium pr-1">${log.action}</td>
                         <td class="py-2.5">${typeBadge}</td>
                         <td class="py-2.5 text-left text-slate-400 pl-1" dir="ltr">${dateStr}</td>
@@ -753,17 +945,45 @@
             gradient.append("stop").attr("offset", "0%").attr("stop-color", "#a855f7");
             gradient.append("stop").attr("offset", "100%").attr("stop-color", "#6366f1");
 
+            let tooltip = document.getElementById('d3-chart-tooltip');
+            if (!tooltip) {
+                tooltip = document.createElement('div');
+                tooltip.id = 'd3-chart-tooltip';
+                tooltip.className = 'fixed hidden bg-slate-900/95 border border-purple-500/50 text-white text-xs px-3 py-2 rounded-xl shadow-2xl pointer-events-none z-50 transition-opacity duration-150 backdrop-blur-md';
+                document.body.appendChild(tooltip);
+            }
+
             svg.selectAll(".bar")
                 .data(data)
                 .enter()
                 .append("rect")
-                .attr("class", "bar")
+                .attr("class", "bar cursor-pointer")
                 .attr("x", d => x(d.day))
                 .attr("y", chartHeight)
                 .attr("width", x.bandwidth())
                 .attr("height", 0)
                 .attr("rx", 6)
                 .style("fill", "url(#bar-gradient)")
+                .on("mouseover", function(event, d) {
+                    d3.select(this).style("opacity", "0.8").style("filter", "brightness(1.25)");
+                    const tip = document.getElementById('d3-chart-tooltip');
+                    if (tip) {
+                        tip.innerHTML = `<div class="font-bold text-purple-300 mb-0.5">${d.day}</div><div class="flex items-center space-x-1 space-x-reverse"><span class="text-slate-300">کاربران فعال:</span> <span class="font-mono font-bold text-emerald-400 text-sm">${d.activeUsers}</span> <span class="text-[10px] text-slate-400">نفر</span></div>`;
+                        tip.classList.remove('hidden');
+                    }
+                })
+                .on("mousemove", function(event) {
+                    const tip = document.getElementById('d3-chart-tooltip');
+                    if (tip) {
+                        tip.style.left = (event.clientX - tip.offsetWidth / 2) + "px";
+                        tip.style.top = (event.clientY - tip.offsetHeight - 15) + "px";
+                    }
+                })
+                .on("mouseleave", function(event) {
+                    d3.select(this).style("opacity", "1").style("filter", "none");
+                    const tip = document.getElementById('d3-chart-tooltip');
+                    if (tip) tip.classList.add('hidden');
+                })
                 .transition()
                 .duration(800)
                 .attr("y", d => y(d.activeUsers))

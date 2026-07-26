@@ -84,6 +84,15 @@ app.delete('/api/admin/logs', (req, res) => {
   res.status(200).json({ success: true, activityLogs });
 });
 
+// POST /api/admin/logs/delete-bulk - Admin removes specific selected logs
+app.post('/api/admin/logs/delete-bulk', (req, res) => {
+  const { ids } = req.body;
+  if (Array.isArray(ids) && ids.length > 0) {
+    activityLogs = activityLogs.filter(log => !ids.includes(log.id));
+  }
+  res.status(200).json({ success: true, activityLogs });
+});
+
 // POST /api/admin/update-policy - Admin panel updates the app version requirements
 app.post('/api/admin/update-policy', (req, res) => {
   const { latestVersionCode, latestVersionName, isMandatory, releaseNotes, upcomingFeaturesTeaser, downloadUrl } = req.body;
