@@ -10,6 +10,11 @@ import com.example.data.model.*
 import com.example.data.repository.ExpenseRepository
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import java.util.Calendar
 
 data class SettleTransaction(
@@ -54,6 +59,94 @@ class SplitEaseViewModel(application: Application) : AndroidViewModel(applicatio
     fun toggleDebtAlerts(enabled: Boolean) {
         _enableDebtAlerts.value = enabled
         sharedPrefs.edit().putBoolean("enableDebtAlerts", enabled).apply()
+    }
+
+    // App Update & Admin Announcement State
+    private val _backendApiUrl = MutableStateFlow(sharedPrefs.getString("backendApiUrl", "https://splitease-api.vercel.app/api") ?: "https://splitease-api.vercel.app/api")
+    val backendApiUrl: StateFlow<String> = _backendApiUrl.asStateFlow()
+
+    private val _appUpdatePolicy = MutableStateFlow<AppUpdatePolicy?>(null)
+    val appUpdatePolicy: StateFlow<AppUpdatePolicy?> = _appUpdatePolicy.asStateFlow()
+
+    private val _activeAdminMessage = MutableStateFlow<AdminMessage?>(null)
+    val activeAdminMessage: StateFlow<AdminMessage?> = _activeAdminMessage.asStateFlow()
+
+    fun saveBackendApiUrl(url: String) {
+        _backendApiUrl.value = url
+        sharedPrefs.edit().putString("backendApiUrl", url).apply()
+        fetchAppConfigFromServer()
+    }
+
+    fun dismissAdminMessage() {
+        _activeAdminMessage.value = null
+    }
+
+    fun dismissOptionalUpdate() {
+        if (_appUpdatePolicy.value?.isMandatory == false) {
+            _appUpdatePolicy.value = null
+        }
+    }
+
+    fun simulateUpdatePolicy(versionCode: Int, versionName: String, isMandatory: Boolean, releaseNotes: String, upcomingTeaser: String?) {
+        _appUpdatePolicy.value = AppUpdatePolicy(
+            latestVersionCode = versionCode,
+            latestVersionName = versionName,
+            isMandatory = isMandatory,
+            releaseNotes = releaseNotes,
+            upcomingFeaturesTeaser = upcomingTeaser.takeIf { !it.isNullOrBlank() }
+        )
+    }
+
+    fun simulateAdminMessage(title: String, message: String, type: String) {
+        _activeAdminMessage.value = AdminMessage(
+            id = "msg_" + System.currentTimeMillis(),
+            title = title,
+            message = message,
+            type = type,
+            isActive = true
+        )
+    }
+
+    fun fetchAppConfigFromServer() {
+        viewModelScope.launch {
+            try {
+                val url = _backendApiUrl.value.trimEnd('/') + "/config"
+                val response = withContext(Dispatchers.IO) {
+                    val client = OkHttpClient()
+                    val request = Request.Builder().url(url).build()
+                    client.newCall(request).execute()
+                }
+                if (response.isSuccessful && response.body != null) {
+                    val jsonStr = response.body!!.string()
+                    val jsonObject = JSONObject(jsonStr)
+                    if (jsonObject.has("updatePolicy")) {
+                        val upObj = jsonObject.getJSONObject("updatePolicy")
+                        _appUpdatePolicy.value = AppUpdatePolicy(
+                            latestVersionCode = upObj.optInt("latestVersionCode", 1),
+                            latestVersionName = upObj.optString("latestVersionName", "1.0.0"),
+                            isMandatory = upObj.optBoolean("isMandatory", false),
+                            releaseNotes = upObj.optString("releaseNotes", ""),
+                            upcomingFeaturesTeaser = upObj.optString("upcomingFeaturesTeaser", null),
+                            downloadUrl = upObj.optString("downloadUrl", "https://example.com")
+                        )
+                    }
+                    if (jsonObject.has("activeMessage")) {
+                        val msgObj = jsonObject.getJSONObject("activeMessage")
+                        if (msgObj.optBoolean("isActive", false)) {
+                            _activeAdminMessage.value = AdminMessage(
+                                id = msgObj.optString("id", "msg_1"),
+                                title = msgObj.optString("title", ""),
+                                message = msgObj.optString("message", ""),
+                                type = msgObj.optString("type", "INFO"),
+                                isActive = true
+                            )
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                // Keep simulated/local fallback state when offline or endpoint unreachable
+            }
+        }
     }
 
     // Groups & Selected Group
@@ -133,6 +226,7 @@ class SplitEaseViewModel(application: Application) : AndroidViewModel(applicatio
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     init {
+        fetchAppConfigFromServer()
         viewModelScope.launch { processRecurringSchedules() }
         // Create initial default group if none exists after small delay or instantly, but only on first run
         viewModelScope.launch {

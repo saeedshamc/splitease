@@ -113,6 +113,161 @@ fun SplitEaseApp(viewModel: SplitEaseViewModel) {
         com.example.data.worker.RecurringWorkScheduler.setupPeriodicWork(context)
     }
 
+    val appUpdatePolicy by viewModel.appUpdatePolicy.collectAsStateWithLifecycle()
+    val activeAdminMessage by viewModel.activeAdminMessage.collectAsStateWithLifecycle()
+    val currentVersionCode = 1 // Standard app release build version
+
+    // 1. Mandatory / Optional Update Dialog
+    appUpdatePolicy?.let { policy ->
+        if (policy.latestVersionCode > currentVersionCode) {
+            AlertDialog(
+                onDismissRequest = {
+                    if (!policy.isMandatory) {
+                        viewModel.dismissOptionalUpdate()
+                    }
+                },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = if (policy.isMandatory) Icons.Rounded.SystemUpdateAlt else Icons.Rounded.NewReleases,
+                            contentDescription = null,
+                            tint = if (policy.isMandatory) Color(0xFFEF4444) else MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (policy.isMandatory) (if (isFarsi) "آپدیت اجباری برنامه" else "Mandatory Update Required") else (if (isFarsi) "نسخه جدید منتشر شد!" else "New Version Available!"),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp
+                        )
+                    }
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            text = if (isFarsi) "نسخه جدید ${policy.latestVersionName} آماده دریافت است." else "Version ${policy.latestVersionName} is now available.",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp
+                        )
+                        if (policy.releaseNotes.isNotBlank()) {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp).fillMaxWidth()) {
+                                    Text(
+                                        text = if (isFarsi) "✨ چه چیزهایی در این نسخه اضافه شده:" else "✨ What's New:",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(text = policy.releaseNotes, fontSize = 12.sp)
+                                }
+                            }
+                        }
+                        if (!policy.upcomingFeaturesTeaser.isNullOrBlank()) {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF10B981).copy(alpha = 0.15f)),
+                                border = BorderStroke(1.dp, Color(0xFF10B981).copy(alpha = 0.5f)),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp).fillMaxWidth()) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Rounded.RocketLaunch, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = if (isFarsi) "🚀 پیش‌نمایش قابلیت‌های آینده:" else "🚀 Upcoming Features Teaser:",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 12.sp,
+                                            color = Color(0xFF10B981)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(text = policy.upcomingFeaturesTeaser!!, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface)
+                                }
+                            }
+                        }
+                        if (policy.isMandatory) {
+                            Text(
+                                text = if (isFarsi) "⚠️ برای ادامه استفاده از برنامه، حتماً باید نسخه جدید را نصب کنید." else "⚠️ You must update to this version to continue using the app.",
+                                fontSize = 11.sp,
+                                color = Color(0xFFEF4444),
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(policy.downloadUrl))
+                            try { context.startActivity(intent) } catch (e: Exception) {
+                                Toast.makeText(context, if (isFarsi) "لینک دانلود باز نشد" else "Cannot open download link", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = if (policy.isMandatory) Color(0xFFEF4444) else MaterialTheme.colorScheme.primary),
+                        modifier = Modifier.testTag("confirm_update_btn")
+                    ) {
+                        Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(if (isFarsi) "دانلود و به‌روزرسانی" else "Update Now")
+                    }
+                },
+                dismissButton = if (!policy.isMandatory) {
+                    {
+                        OutlinedButton(
+                            onClick = { viewModel.dismissOptionalUpdate() },
+                            modifier = Modifier.testTag("dismiss_update_btn")
+                        ) {
+                            Text(if (isFarsi) "یادآوری در بعد" else "Remind Later")
+                        }
+                    }
+                } else null
+            )
+        }
+    }
+
+    // 2. Admin Broadcast Message Dialog
+    activeAdminMessage?.let { msg ->
+        if (msg.isActive) {
+            val colorTint = when (msg.type) {
+                "WARNING" -> Color(0xFFF59E0B) // Amber
+                "FEATURE_TEASER" -> Color(0xFF10B981) // Emerald
+                else -> MaterialTheme.colorScheme.primary // Info
+            }
+            val iconVec = when (msg.type) {
+                "WARNING" -> Icons.Rounded.Warning
+                "FEATURE_TEASER" -> Icons.Rounded.AutoAwesome
+                else -> Icons.Rounded.Campaign
+            }
+            AlertDialog(
+                onDismissRequest = { viewModel.dismissAdminMessage() },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(imageVector = iconVec, contentDescription = null, tint = colorTint, modifier = Modifier.size(24.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(text = msg.title.ifEmpty { if (isFarsi) "پیام مدیر سیستم" else "Announcement" }, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    }
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(text = msg.message, fontSize = 13.sp, lineHeight = 20.sp)
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = { viewModel.dismissAdminMessage() },
+                        colors = ButtonDefaults.buttonColors(containerColor = colorTint),
+                        modifier = Modifier.testTag("dismiss_admin_msg_btn")
+                    ) {
+                        Text(if (isFarsi) "متوجه شدم" else "Got It")
+                    }
+                }
+            )
+        }
+    }
+
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         topBar = {
@@ -3702,6 +3857,122 @@ fun SettingsScreen(
                                 Icon(imageVector = Icons.Rounded.Delete, contentDescription = "Delete Schedule", tint = ColorExpense)
                             }
                         }
+                    }
+                }
+            }
+        }
+
+        // Admin & Backend Sync Panel (پنل مدیریت آپدیت و پیام‌ها)
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f))
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Rounded.CloudSync,
+                        contentDescription = "Backend Sync",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = if (isFarsi) "پنل اتصال بک‌اند و مدیریت آپدیت‌ها" else "Backend Sync & App Announcements",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                        Text(
+                            text = if (isFarsi) "مدیریت پیام‌های عمومی مدیر، آپدیت‌های اجباری/اختیاری و پیش‌نمایش قابلیت‌های جدید" else "Configure API URL & simulate mandatory/optional update dialogs and teasers",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                        )
+                    }
+                }
+
+                val backendApiUrl by viewModel.backendApiUrl.collectAsStateWithLifecycle()
+                var editUrlText by remember(backendApiUrl) { mutableStateOf(backendApiUrl) }
+
+                OutlinedTextField(
+                    value = editUrlText,
+                    onValueChange = { editUrlText = it },
+                    label = { Text(if (isFarsi) "آدرس بک‌اند (Vercel API URL)" else "Backend API URL") },
+                    modifier = Modifier.fillMaxWidth().testTag("backend_url_input"),
+                    shape = RoundedCornerShape(10.dp),
+                    singleLine = true,
+                    trailingIcon = {
+                        IconButton(onClick = { viewModel.saveBackendApiUrl(editUrlText) }) {
+                            Icon(Icons.Rounded.Save, contentDescription = "Save", tint = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                )
+
+                Text(
+                    text = if (isFarsi) "تست سریع پنجره‌ها و پیغام‌های سیستم (بدون نیاز به سرور):" else "Simulate Live Dialogs & Teasers:",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            viewModel.simulateUpdatePolicy(
+                                versionCode = 2,
+                                versionName = "2.0.0 (آپدیت جدید)",
+                                isMandatory = true,
+                                releaseNotes = if (isFarsi) "✨ قابلیت‌های اضافه شده در ورژن ۲.۰:\n• اضافه شدن تفکیک سفر خانواده‌ها با نفرات\n• فیلتر دسته‌بندی و جستجوی پیشرفته در هزینه‌ها\n• بهینه‌سازی سرعت و خروجی اکسل و PDF" else "✨ What's new in v2.0:\n• Multi-family trip split by headcount\n• Category filter & search in expense history\n• Improved PDF and Excel export speed",
+                                upcomingTeaser = null
+                            )
+                        },
+                        modifier = Modifier.weight(1f).testTag("sim_mandatory_btn"),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444)),
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
+                    ) {
+                        Text(if (isFarsi) "تست آپدیت اجباری" else "Mandatory Update", fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                    }
+
+                    Button(
+                        onClick = {
+                            viewModel.simulateUpdatePolicy(
+                                versionCode = 2,
+                                versionName = "1.5.0 (آپدیت اختیاری)",
+                                isMandatory = false,
+                                releaseNotes = if (isFarsi) "✨ تغییرات نسخه جدید:\n• بهبود رابط کاربری و ویجت‌های جدید\n• رفع باگ‌های جزئی در نمودار هزینه‌ها" else "✨ What's new in v1.5:\n• Improved UI and new summary widgets\n• Minor bug fixes in expense charts",
+                                upcomingTeaser = if (isFarsi) "🚀 قابلیت‌های نسخه بعدی: ساخت حساب کاربری آنلاین و همگام‌سازی ابری گروهی در حال ساخت است!" else "🚀 Upcoming Feature Teaser: Cloud sync and group member login are coming in the next release!"
+                            )
+                        },
+                        modifier = Modifier.weight(1f).testTag("sim_optional_btn"),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
+                    ) {
+                        Text(if (isFarsi) "تست آپدیت اختیاری + قابلیت‌های آینده" else "Optional + Teaser", fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                    }
+
+                    Button(
+                        onClick = {
+                            viewModel.simulateAdminMessage(
+                                title = if (isFarsi) "📢 پیام مدیر سیستم" else "📢 Admin Announcement",
+                                message = if (isFarsi) "سلام کاربران عزیز! سرورهای پشتیبان‌گیری در تاریخ جمعه برای ارتقا به مدت ۱ ساعت در دسترس نخواهند بود. محاسبات آفلاین همچنان بدون مشکل کار خواهند کرد." else "Hello users! Cloud backup servers will undergo maintenance this Friday for 1 hour. Offline calculations remain 100% functional.",
+                                type = "INFO"
+                            )
+                        },
+                        modifier = Modifier.weight(1f).testTag("sim_msg_btn"),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B82F6)),
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
+                    ) {
+                        Text(if (isFarsi) "تست پیام مدیر" else "Admin Message", fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
                     }
                 }
             }

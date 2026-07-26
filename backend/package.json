@@ -1,0 +1,17 @@
+{
+  "name": "splitease-backend",
+  "version": "1.0.0",
+  "description": "Vercel Serverless Backend for SplitEase App (Update Policy & Admin Messages)",
+  "main": "api/index.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2"
+  },
+  "engines": {
+    "node": ">=18.x"
+  }
+}
