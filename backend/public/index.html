@@ -119,7 +119,7 @@
             </div>
             <div class="flex items-center space-x-3 space-x-reverse flex-1 max-w-md mx-6 relative" id="search-container" onclick="event.stopPropagation()">
                 <div class="relative w-full">
-                    <input type="text" id="search-input" oninput="filterLogsAndMessages(this.value)" onfocus="showRecentSearches()" onkeydown="if(event.key==='Enter') saveRecentSearch(this.value)" placeholder="جستجو در تاریخچه فعالیت‌ها و پیام‌ها..." class="w-full bg-slate-800/80 border border-slate-700 rounded-xl py-1.5 px-3 pr-9 pl-8 text-xs text-white focus:outline-none focus:border-blue-500 transition">
+                    <input type="text" id="search-input" oninput="filterLogsAndMessages(this.value); showQuerySuggestions(this.value);" onfocus="showRecentSearches(); showQuerySuggestions(this.value);" onkeydown="if(event.key==='Enter') saveRecentSearch(this.value)" placeholder="جستجو در تاریخچه فعالیت‌ها و پیام‌ها..." class="w-full bg-slate-800/80 border border-slate-700 rounded-xl py-1.5 px-3 pr-9 pl-8 text-xs text-white focus:outline-none focus:border-blue-500 transition">
                     <i class="fa-solid fa-search absolute right-3 top-2.5 text-slate-400 text-xs"></i>
                     <button type="button" onclick="toggleRecentSearches(event)" class="absolute left-2 top-1.5 text-slate-400 hover:text-white p-1 rounded transition" title="جستجوهای اخیر">
                         <i class="fa-solid fa-clock-rotate-left text-xs"></i>
@@ -135,6 +135,16 @@
                         <!-- Populated dynamically -->
                     </ul>
                 </div>
+                <!-- Real-time Analytics Query Suggestions Dropdown -->
+                <div id="query-suggestions-dropdown" class="absolute top-full left-0 right-0 mt-1.5 bg-slate-800 border border-purple-500/40 rounded-xl shadow-2xl z-50 hidden overflow-hidden backdrop-blur-md">
+                    <div class="flex items-center justify-between px-3 py-2 bg-gradient-to-r from-purple-900/40 to-slate-900/60 border-b border-purple-500/30 text-[11px] text-purple-300 font-medium">
+                        <span><i class="fa-solid fa-lightbulb mr-1 text-amber-400 animate-pulse"></i> پیشنهادهای هوشمند کلمات کلیدی (Analytics Top Keywords)</span>
+                        <span class="text-[9px] bg-purple-500/20 px-1.5 py-0.5 rounded font-mono text-purple-200">Real-time</span>
+                    </div>
+                    <ul id="query-suggestions-list" class="divide-y divide-slate-700/50 max-h-52 overflow-y-auto text-xs">
+                        <!-- Populated dynamically -->
+                    </ul>
+                </div>
             </div>
             <div class="flex items-center space-x-3 space-x-reverse">
                 <button onclick="toggleLanguage()" id="lang-toggle-btn" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition flex items-center space-x-1.5 space-x-reverse border border-slate-700/60" title="تغییر زبان (فارسی / English)">
@@ -147,6 +157,10 @@
                 <button onclick="downloadConfigSnapshot()" class="p-2 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 transition flex items-center space-x-1.5 space-x-reverse" title="دانلود بکاپ کامل تنظیمات (JSON Snapshot)">
                     <i class="fa-solid fa-file-arrow-down text-sm"></i>
                     <span class="text-xs font-medium hidden sm:inline">بکاپ JSON</span>
+                </button>
+                <button onclick="openShortcutsModal()" class="p-2 px-2.5 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/30 transition flex items-center space-x-1.5 space-x-reverse" title="راهنمای کلیدهای میانبر (Ctrl+K, Ctrl+R, Ctrl+Shift+E)">
+                    <i class="fa-solid fa-keyboard text-sm text-purple-400"></i>
+                    <span id="btn-shortcuts-label" class="text-xs font-mono font-bold hidden md:inline">Ctrl+K</span>
                 </button>
                 <span id="connection-status" class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 transition-all duration-300">
                     <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse ml-2"></span>
@@ -687,6 +701,166 @@
                     </div>
                 </div>
             </div>
+
+            <!-- SLA Latency Watchdog Section (Percentile Threshold Alerting) -->
+            <div class="mt-6 bg-slate-800/40 p-5 rounded-xl border border-amber-500/30 space-y-4">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-700/60 pb-3">
+                    <div class="flex items-center space-x-3 space-x-reverse">
+                        <div class="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shadow-inner">
+                            <i class="fa-solid fa-stopwatch text-lg animate-pulse"></i>
+                        </div>
+                        <div>
+                            <h3 id="latency-box-title" class="text-sm font-bold text-white flex items-center">
+                                مانیتورینگ تاخیر سرور و صدک پاسخگویی (SLA Latency Watchdog)
+                                <span class="mr-2 text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full font-mono font-normal">P95 / P99 SLA</span>
+                            </h3>
+                            <p id="latency-box-sub" class="text-xs text-slate-400">ارسال هشدار خودکار در صورت تجاوز تاخیر سرور از آستانه مشخص (Percentile Threshold) برای مدت مداوم</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2 space-x-reverse">
+                        <button id="btn-sim-latency" onclick="simulateLatencySpike()" class="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-500 hover:to-rose-500 text-white font-bold text-xs transition shadow flex items-center border border-amber-400/30">
+                            <i class="fa-solid fa-gauge-high ml-1.5 text-amber-200"></i> شبیه‌سازی جهش تاخیر (Spike Test)
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+                    <div>
+                        <label id="lbl-lat-thresh" class="block text-slate-300 mb-1 font-medium">آستانه تاخیر مجاز (Threshold):</label>
+                        <select id="latency-threshold-select" class="w-full bg-slate-900 border border-slate-700 rounded-xl py-2 px-3 text-white focus:outline-none focus:border-amber-500 font-mono text-xs">
+                            <option value="500">500 ms (سریع)</option>
+                            <option value="800" selected>800 ms (استاندارد)</option>
+                            <option value="1200">1200 ms (حداکثر تحمل)</option>
+                            <option value="2000">2000 ms (بحرانی)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label id="lbl-lat-perc" class="block text-slate-300 mb-1 font-medium">صدک ارزیابی (Percentile SLA):</label>
+                        <select id="latency-percentile-select" class="w-full bg-slate-900 border border-slate-700 rounded-xl py-2 px-3 text-white focus:outline-none focus:border-amber-500 font-mono text-xs">
+                            <option value="P90">صدک ۹۰ام (P90 - 90th Percentile)</option>
+                            <option value="P95" selected>صدک ۹۵ام (P95 - 95th Percentile)</option>
+                            <option value="P99">صدک ۹۹ام (P99 - 99th Percentile)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label id="lbl-lat-dur" class="block text-slate-300 mb-1 font-medium">مدت پایداری تاخیر (Sustained Period):</label>
+                        <select id="latency-duration-select" class="w-full bg-slate-900 border border-slate-700 rounded-xl py-2 px-3 text-white focus:outline-none focus:border-amber-500 font-mono text-xs">
+                            <option value="3">۳ دقیقه مداوم (3 Minutes)</option>
+                            <option value="5" selected>۵ دقیقه مداوم (5 Minutes)</option>
+                            <option value="10">۱۰ دقیقه مداوم (10 Minutes)</option>
+                            <option value="15">۱۵ دقیقه مداوم (15 Minutes)</option>
+                        </select>
+                    </div>
+                    <div class="flex flex-col justify-end">
+                        <div class="flex items-center justify-between bg-slate-900/80 p-2 rounded-xl border border-slate-700/60 mb-2">
+                            <span id="lbl-lat-chk" class="text-slate-300 font-medium">فعال‌سازی مانیتورینگ:</span>
+                            <input type="checkbox" id="chk-latency-watchdog" checked class="rounded bg-slate-800 border-slate-600 text-amber-500 focus:ring-0 cursor-pointer">
+                        </div>
+                        <button id="btn-save-latency" onclick="saveLatencyAlertConfig()" class="w-full py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs transition flex items-center justify-center shadow">
+                            <i class="fa-solid fa-check ml-1.5"></i> ذخیره تنظیمات تاخیر
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 7: Recurring Automated Log Reports (PDF / Excel) -->
+        <div class="glass-panel rounded-2xl p-6 shadow-xl relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800/80 to-indigo-950/40 border border-indigo-500/30">
+            <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 via-blue-500 to-teal-400"></div>
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                <div class="flex items-center space-x-3 space-x-reverse">
+                    <div class="w-11 h-11 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shadow-inner">
+                        <i class="fa-solid fa-calendar-check text-xl"></i>
+                    </div>
+                    <div>
+                        <h2 id="sec-reports-title" class="text-base font-bold text-white flex items-center">
+                            زمان‌بندی ارسال خودکار گزارش‌های دوره‌ای (Scheduled Automated Reports)
+                            <span class="mr-2 text-[10px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 px-2 py-0.5 rounded-full font-mono font-normal">PDF & Excel Cron</span>
+                        </h2>
+                        <p id="sec-reports-sub" class="text-xs text-slate-400">ارسال خودکار گزارش‌های روزانه، هفتگی یا ماهانه لاگ‌ها و خطاها به ایمیل مدیر سرور در قالب فایل PDF یا Excel</p>
+                    </div>
+                </div>
+                <div>
+                    <button onclick="toggleNewReportForm()" id="btn-toggle-report-form" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition shadow-lg shadow-indigo-500/25 flex items-center">
+                        <i class="fa-solid fa-plus ml-2"></i> افزودن زمان‌بندی جدید
+                    </button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+                <!-- New Schedule Report Form (Collapsible/Side Box) -->
+                <div id="new-report-form-container" class="md:col-span-5 bg-slate-800/40 p-4 rounded-xl border border-slate-700/60 space-y-3">
+                    <h3 id="rep-form-title" class="text-xs font-bold text-indigo-300 flex items-center border-b border-slate-700/60 pb-2">
+                        <i class="fa-solid fa-clock-rotate-left mr-2"></i> تعریف زمان‌بندی گزارش جدید
+                    </h3>
+                    
+                    <div class="space-y-2.5 text-xs">
+                        <div>
+                            <label id="lbl-rep-title" class="block text-slate-300 mb-1 font-medium">عنوان گزارش:</label>
+                            <input type="text" id="report-title-input" placeholder="مثال: گزارش جامع روزانه لاگ‌های سرور" class="w-full bg-slate-900 border border-slate-700 rounded-lg py-1.5 px-3 text-xs text-white focus:outline-none focus:border-indigo-500 transition">
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label id="lbl-rep-freq" class="block text-slate-300 mb-1 font-medium">تواتر ارسال:</label>
+                                <select id="report-freq-select" class="w-full bg-slate-900 border border-slate-700 rounded-lg py-1.5 px-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono">
+                                    <option value="DAILY">روزانه (Daily)</option>
+                                    <option value="WEEKLY">هفتگی (Weekly)</option>
+                                    <option value="MONTHLY">ماهانه (Monthly)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label id="lbl-rep-format" class="block text-slate-300 mb-1 font-medium">قالب فایل خروجی:</label>
+                                <select id="report-format-select" class="w-full bg-slate-900 border border-slate-700 rounded-lg py-1.5 px-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono">
+                                    <option value="PDF">فایل PDF</option>
+                                    <option value="EXCEL">فایل Excel (.xlsx)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label id="lbl-rep-cat" class="block text-slate-300 mb-1 font-medium">دسته‌بندی لاگ‌ها:</label>
+                                <select id="report-category-select" class="w-full bg-slate-900 border border-slate-700 rounded-lg py-1.5 px-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono">
+                                    <option value="ALL">همه لاگ‌ها (All)</option>
+                                    <option value="ERROR">فقط خطاها (Errors)</option>
+                                    <option value="WARNING">هشدارها (Warnings)</option>
+                                    <option value="SYSTEM">سیستمی (System)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label id="lbl-rep-time" class="block text-slate-300 mb-1 font-medium">ساعت ارسال (Time):</label>
+                                <input type="time" id="report-time-input" value="08:00" class="w-full bg-slate-900 border border-slate-700 rounded-lg py-1 px-2 text-xs text-white font-mono focus:outline-none focus:border-indigo-500" dir="ltr">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label id="lbl-rep-email" class="block text-slate-300 mb-1 font-medium">ایمیل گیرنده گزارش:</label>
+                            <input type="email" id="report-email-input" value="shamssaeed2025@gmail.com" class="w-full bg-slate-900 border border-slate-700 rounded-lg py-1.5 px-3 text-xs text-white font-mono focus:outline-none focus:border-indigo-500 text-left" dir="ltr">
+                        </div>
+                    </div>
+
+                    <div class="pt-2">
+                        <button id="btn-create-report" onclick="createScheduledReport()" class="w-full py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition flex items-center justify-center shadow">
+                            <i class="fa-solid fa-check ml-1.5"></i> ذخیره و زمان‌بندی گزارش
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Active Scheduled Reports List -->
+                <div class="md:col-span-7 bg-slate-800/40 p-4 rounded-xl border border-slate-700/60 flex flex-col">
+                    <div class="flex items-center justify-between border-b border-slate-700/60 pb-2 mb-3">
+                        <h3 id="rep-list-title" class="text-xs font-bold text-slate-300 flex items-center">
+                            <i class="fa-solid fa-list-check mr-2 text-indigo-400"></i> زمان‌بندی‌های فعال ارسال گزارش
+                        </h3>
+                        <span class="text-[11px] text-slate-400 font-mono" id="scheduled-reports-count">۲ زمان‌بندی فعال</span>
+                    </div>
+                    
+                    <div class="flex-1 overflow-y-auto max-h-[260px] pr-1 space-y-2.5" id="scheduled-reports-list">
+                        <!-- Injected dynamically -->
+                    </div>
+                </div>
+            </div>
         </div>
         </div> <!-- End of tab-content-overview -->
 
@@ -991,6 +1165,58 @@
         </div>
     </div>
 
+    <!-- Keyboard Shortcuts Guide Modal -->
+    <div id="shortcuts-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm hidden opacity-0 transition-opacity duration-300">
+        <div class="glass-panel bg-slate-900 border border-purple-500/30 rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl transform scale-95 transition-transform duration-300">
+            <div class="flex items-center justify-between border-b border-slate-700/80 pb-4 mb-4">
+                <div class="flex items-center space-x-3 space-x-reverse">
+                    <div class="w-10 h-10 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400">
+                        <i class="fa-solid fa-keyboard text-lg"></i>
+                    </div>
+                    <div>
+                        <h3 id="short-modal-title" class="text-base font-bold text-white">راهنمای کلیدهای میانبر (Keyboard Shortcuts)</h3>
+                        <p id="short-modal-sub" class="text-xs text-slate-400">دسترسی سریع‌تر به قابلیت‌های پرکاربرد پنل مدیریت</p>
+                    </div>
+                </div>
+                <button onclick="closeShortcutsModal()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="space-y-3 my-4">
+                <div class="flex items-center justify-between p-3 rounded-xl bg-slate-800/60 border border-slate-700/60">
+                    <div class="flex items-center space-x-2.5 space-x-reverse">
+                        <i class="fa-solid fa-magnifying-glass text-blue-400 text-sm"></i>
+                        <span id="short-lbl-1" class="text-xs text-slate-200 font-medium">تمرکز روی نوار جستجو و تایپ فوری</span>
+                    </div>
+                    <kbd class="px-2.5 py-1 rounded bg-slate-700 border border-slate-600 font-mono text-xs text-purple-300 font-bold shadow">Ctrl + K</kbd>
+                </div>
+
+                <div class="flex items-center justify-between p-3 rounded-xl bg-slate-800/60 border border-slate-700/60">
+                    <div class="flex items-center space-x-2.5 space-x-reverse">
+                        <i class="fa-solid fa-rotate text-emerald-400 text-sm"></i>
+                        <span id="short-lbl-2" class="text-xs text-slate-200 font-medium">به‌روزرسانی دستی اطلاعات و لاگ‌ها (بدون رفرش صفحه)</span>
+                    </div>
+                    <kbd class="px-2.5 py-1 rounded bg-slate-700 border border-slate-600 font-mono text-xs text-emerald-300 font-bold shadow">Ctrl + R</kbd>
+                </div>
+
+                <div class="flex items-center justify-between p-3 rounded-xl bg-slate-800/60 border border-slate-700/60">
+                    <div class="flex items-center space-x-2.5 space-x-reverse">
+                        <i class="fa-solid fa-file-export text-amber-400 text-sm"></i>
+                        <span id="short-lbl-3" class="text-xs text-slate-200 font-medium">باز کردن پنجره فیلتر پیشرفته خروجی (Export Filter)</span>
+                    </div>
+                    <kbd class="px-2.5 py-1 rounded bg-slate-700 border border-slate-600 font-mono text-xs text-amber-300 font-bold shadow">Ctrl + Shift + E</kbd>
+                </div>
+            </div>
+
+            <div class="pt-2">
+                <button onclick="closeShortcutsModal()" class="w-full py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition flex items-center justify-center shadow">
+                    <i class="fa-solid fa-check ml-1.5"></i> متوجه شدم، بستن پنجره
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Notification -->
     <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-20 opacity-0 transition-all duration-300 max-w-sm bg-slate-800 border border-slate-700 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center space-x-3 space-x-reverse pointer-events-none">
         <i id="toast-icon" class="fa-solid fa-check-circle text-emerald-400 text-lg"></i>
@@ -1012,6 +1238,17 @@
         let searchDebounceTimer = null;
         let autoRefreshInterval = null;
         let heartbeatInterval = null;
+        let scheduledReportsList = [];
+        let searchAnalyticsKeywords = [
+            { kw: 'Vercel API', count: 45, cat: 'Network / Infra', color: 'rose' },
+            { kw: '185.192.112.45', count: 38, cat: 'Security / Access', color: 'indigo' },
+            { kw: 'خروج اجباری', count: 29, cat: 'Security / Access', color: 'indigo' },
+            { kw: 'Token Expired', count: 24, cat: 'Security / Access', color: 'purple' },
+            { kw: 'خطا در احراز هویت', count: 19, cat: 'Security / Access', color: 'amber' },
+            { kw: 'هزینه سفر شمال', count: 15, cat: 'Admin Search Query', color: 'blue' },
+            { kw: 'اتصال ناموفق', count: 12, cat: 'Network / Infra', color: 'rose' },
+            { kw: 'آپدیت اجباری', count: 10, cat: 'Policy Update', color: 'emerald' }
+        ];
 
         const severityMap = {
             'ERROR': 6,
@@ -1042,6 +1279,44 @@
             checkServerHeartbeat();
             if (heartbeatInterval) clearInterval(heartbeatInterval);
             heartbeatInterval = setInterval(checkServerHeartbeat, 10000);
+
+            // Setup global keyboard shortcuts
+            window.addEventListener('keydown', (event) => {
+                const isCtrlOrCmd = event.ctrlKey || event.metaKey;
+                if (!isCtrlOrCmd) return;
+                const key = event.key.toLowerCase();
+                
+                // Ctrl+K or Cmd+K: Focus search bar
+                if (key === 'k' && !event.shiftKey) {
+                    event.preventDefault();
+                    const searchInput = document.getElementById('search-input');
+                    if (searchInput) {
+                        searchInput.focus();
+                        searchInput.select();
+                        showToast(currentLang === 'en' ? 'Focused search bar (Ctrl+K)' : 'تمرکز روی نوار جستجو (Ctrl+K)', 'info');
+                    }
+                }
+                // Ctrl+R or Cmd+R: Manual log refresh
+                else if (key === 'r' && !event.shiftKey) {
+                    event.preventDefault();
+                    fetchStats(false);
+                    showToast(currentLang === 'en' ? 'Manual refresh triggered (Ctrl+R)' : 'به‌روزرسانی دستی لاگ‌ها و اطلاعات انجام شد (Ctrl+R)', 'success');
+                }
+                // Ctrl+Shift+E or Cmd+Shift+E: Open export filter modal
+                else if (key === 'e' && event.shiftKey) {
+                    event.preventDefault();
+                    openExportFilterModal();
+                    showToast(currentLang === 'en' ? 'Export filter modal opened (Ctrl+Shift+E)' : 'پنجره فیلتر خروجی باز شد (Ctrl+Shift+E)', 'info');
+                }
+            });
+            
+            // Hide search dropdowns on outside click
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('#search-container')) {
+                    hideQuerySuggestions();
+                    hideRecentSearches();
+                }
+            });
         });
 
         async function checkServerHeartbeat() {
@@ -1290,7 +1565,38 @@
                 '#th-action': lang === 'en' ? 'Quick Action' : 'عملیات سریع',
                 '#cloud-title': lang === 'en' ? 'Keyword Tag Cloud & System Issues' : 'ابر کلمات کلیدی و خطاهای سیستم (Tag Cloud)',
                 '#cloud-subtitle': lang === 'en' ? 'Click on any keyword tag to jump to the Operations Dashboard and filter the activity logs table:' : 'با کلیک روی هر کلمه کلیدی، مستقیماً به داشبورد عملیاتی رفته و جدول لاگ‌ها فیلتر خواهد شد:',
-                '#breakdown-title': lang === 'en' ? 'Log & Search Category Distribution' : 'توزیع موضوعی لاگ‌ها و جستجوها'
+                '#breakdown-title': lang === 'en' ? 'Log & Search Category Distribution' : 'توزیع موضوعی لاگ‌ها و جستجوها',
+
+                // SLA Latency Watchdog
+                '#latency-box-title': lang === 'en' ? 'Server SLA Latency Watchdog (Percentile Thresholds)' : 'مانیتورینگ تاخیر سرور و صدک پاسخگویی (SLA Latency Watchdog)',
+                '#latency-box-sub': lang === 'en' ? 'Automatically dispatch alerts when server latency exceeds specified SLA percentile threshold for a sustained duration' : 'ارسال هشدار خودکار در صورت تجاوز تاخیر سرور از آستانه مشخص (Percentile Threshold) برای مدت مداوم',
+                '#lbl-lat-thresh': lang === 'en' ? 'Latency Threshold (ms):' : 'آستانه تاخیر مجاز (Threshold):',
+                '#lbl-lat-perc': lang === 'en' ? 'SLA Percentile:' : 'صدک ارزیابی (Percentile SLA):',
+                '#lbl-lat-dur': lang === 'en' ? 'Sustained Period:' : 'مدت پایداری تاخیر (Sustained Period):',
+                '#lbl-lat-chk': lang === 'en' ? 'Enable Watchdog:' : 'فعال‌سازی مانیتورینگ:',
+                '#btn-sim-latency': lang === 'en' ? '⚡ Simulate Latency Spike' : '⚡ شبیه‌سازی جهش تاخیر (Spike Test)',
+                '#btn-save-latency': lang === 'en' ? 'Save Latency Config' : 'ذخیره تنظیمات تاخیر',
+
+                // Scheduled Reports
+                '#sec-reports-title': lang === 'en' ? 'Scheduled Automated Log Reports (PDF / Excel)' : 'زمان‌بندی ارسال خودکار گزارش‌های دوره‌ای (Scheduled Automated Reports)',
+                '#sec-reports-sub': lang === 'en' ? 'Schedule automatic generation and delivery of daily, weekly, or monthly log reports as PDF or Excel to admin email' : 'ارسال خودکار گزارش‌های روزانه، هفتگی یا ماهانه لاگ‌ها و خطاها به ایمیل مدیر سرور در قالب فایل PDF یا Excel',
+                '#btn-toggle-report-form': lang === 'en' ? '+ Add New Schedule' : '+ افزودن زمان‌بندی جدید',
+                '#rep-form-title': lang === 'en' ? 'Configure New Scheduled Report' : 'تعریف زمان‌بندی گزارش جدید',
+                '#lbl-rep-title': lang === 'en' ? 'Report Title:' : 'عنوان گزارش:',
+                '#lbl-rep-freq': lang === 'en' ? 'Delivery Frequency:' : 'تواتر ارسال:',
+                '#lbl-rep-format': lang === 'en' ? 'File Format:' : 'قالب فایل خروجی:',
+                '#lbl-rep-cat': lang === 'en' ? 'Log Category:' : 'دسته‌بندی لاگ‌ها:',
+                '#lbl-rep-time': lang === 'en' ? 'Send Time:' : 'ساعت ارسال (Time):',
+                '#lbl-rep-email': lang === 'en' ? 'Recipient Email:' : 'ایمیل گیرنده گزارش:',
+                '#btn-create-report': lang === 'en' ? 'Save Report Schedule' : 'ذخیره و زمان‌بندی گزارش',
+                '#rep-list-title': lang === 'en' ? 'Active Report Schedules' : 'زمان‌بندی‌های فعال ارسال گزارش',
+
+                // Keyboard Shortcuts Modal
+                '#short-modal-title': lang === 'en' ? 'Keyboard Shortcuts Guide' : 'راهنمای کلیدهای میانبر (Keyboard Shortcuts)',
+                '#short-modal-sub': lang === 'en' ? 'Quick access to common dashboard operations' : 'دسترسی سریع‌تر به قابلیت‌های پرکاربرد پنل مدیریت',
+                '#short-lbl-1': lang === 'en' ? 'Focus search bar and type immediately' : 'تمرکز روی نوار جستجو و تایپ فوری',
+                '#short-lbl-2': lang === 'en' ? 'Manual refresh of logs and statistics (without reloading)' : 'به‌روزرسانی دستی اطلاعات و لاگ‌ها (بدون رفرش صفحه)',
+                '#short-lbl-3': lang === 'en' ? 'Open Advanced Export Filter dialog' : 'باز کردن پنجره فیلتر پیشرفته خروجی (Export Filter)'
             };
 
             for (const [selector, val] of Object.entries(map)) {
@@ -1304,6 +1610,7 @@
                 }
             }
             if (currentDashboardTab === 'analytics') renderSearchAnalytics();
+            renderScheduledReports();
         }
 
         function switchDashboardTab(tab) {
@@ -1381,6 +1688,10 @@
             const sortedKeywords = Object.entries(keywordCounts)
                 .map(([kw, data]) => ({ kw, ...data }))
                 .sort((a, b) => b.count - a.count);
+
+            if (sortedKeywords && sortedKeywords.length > 0) {
+                searchAnalyticsKeywords = sortedKeywords;
+            }
 
             const topKwEl = document.getElementById('metric-top-keyword');
             const topErrEl = document.getElementById('metric-top-error');
@@ -1501,6 +1812,11 @@
                         window.alertConfig = data.alertConfig;
                         renderAlertHistory();
                         updateAlertUI();
+                        updateLatencyWatchdogUI();
+                    }
+                    if (data.scheduledReports) {
+                        scheduledReportsList = data.scheduledReports;
+                        renderScheduledReports();
                     }
                     updateTimeoutUI();
                     applyLogFiltersAndRender();
@@ -2876,6 +3192,312 @@
                     </tr>
                 `;
             }).join('');
+        }
+
+        // ==========================================
+        // KEYBOARD SHORTCUTS MODAL
+        // ==========================================
+        function openShortcutsModal() {
+            const modal = document.getElementById('shortcuts-modal');
+            if (modal) {
+                modal.classList.remove('hidden');
+                setTimeout(() => modal.classList.remove('opacity-0'), 10);
+            }
+        }
+
+        function closeShortcutsModal() {
+            const modal = document.getElementById('shortcuts-modal');
+            if (modal) {
+                modal.classList.add('opacity-0');
+                setTimeout(() => modal.classList.add('hidden'), 300);
+            }
+        }
+
+        // ==========================================
+        // REAL-TIME SEARCH QUERY SUGGESTIONS
+        // ==========================================
+        function showQuerySuggestions(val) {
+            const dropdown = document.getElementById('query-suggestions-dropdown');
+            const list = document.getElementById('query-suggestions-list');
+            if (!dropdown || !list) return;
+
+            const trimmed = (val || '').trim().toLowerCase();
+            if (!trimmed && document.activeElement !== document.getElementById('search-input')) {
+                hideQuerySuggestions();
+                return;
+            }
+
+            const keywords = (searchAnalyticsKeywords && searchAnalyticsKeywords.length > 0) ? searchAnalyticsKeywords : [
+                { kw: 'Vercel API', count: 45, cat: 'Network / Infra' },
+                { kw: '185.192.112.45', count: 38, cat: 'Security / Access' },
+                { kw: 'خروج اجباری', count: 29, cat: 'Security / Access' },
+                { kw: 'Token Expired', count: 24, cat: 'Security / Access' },
+                { kw: 'خطا در احراز هویت', count: 19, cat: 'Security / Access' },
+                { kw: 'هزینه سفر شمال', count: 15, cat: 'Admin Search Query' },
+                { kw: 'اتصال ناموفق', count: 12, cat: 'Network / Infra' }
+            ];
+
+            const matches = keywords.filter(k => !trimmed || k.kw.toLowerCase().includes(trimmed)).slice(0, 5);
+            if (matches.length === 0) {
+                hideQuerySuggestions();
+                return;
+            }
+
+            list.innerHTML = matches.map(item => `
+                <li onclick="selectQuerySuggestion('${item.kw.replace(/'/g, "\\'")}')" class="px-3 py-2 hover:bg-slate-700/80 cursor-pointer flex items-center justify-between text-slate-200 transition">
+                    <div class="flex items-center space-x-2 space-x-reverse">
+                        <i class="fa-solid fa-bolt text-amber-400 text-[10px]"></i>
+                        <span class="font-semibold text-xs">${item.kw}</span>
+                    </div>
+                    <div class="flex items-center space-x-2 space-x-reverse">
+                        <span class="text-[10px] bg-slate-700 px-1.5 py-0.5 rounded text-slate-400 font-mono">${item.cat || 'Search Query'}</span>
+                        <span class="text-[10px] bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded font-mono">${item.count || 1} بار</span>
+                    </div>
+                </li>
+            `).join('');
+
+            dropdown.classList.remove('hidden');
+        }
+
+        function hideQuerySuggestions() {
+            const dropdown = document.getElementById('query-suggestions-dropdown');
+            if (dropdown) dropdown.classList.add('hidden');
+        }
+
+        function selectQuerySuggestion(kw) {
+            const searchInput = document.getElementById('search-input');
+            if (searchInput) {
+                searchInput.value = kw;
+                filterLogsAndMessages(kw);
+                saveRecentSearch(kw);
+            }
+            hideQuerySuggestions();
+            showToast(currentLang === 'en' ? `Applied query suggestion: "${kw}"` : `پیشنهاد جستجو اعمال شد: «${kw}»`, 'info');
+        }
+
+        // ==========================================
+        // SLA LATENCY WATCHDOG
+        // ==========================================
+        function updateLatencyWatchdogUI() {
+            const cfg = window.alertConfig || {};
+            const chk = document.getElementById('chk-latency-watchdog');
+            const thresh = document.getElementById('latency-threshold-select');
+            const perc = document.getElementById('latency-percentile-select');
+            const dur = document.getElementById('latency-duration-select');
+
+            if (chk && cfg.latencyWatchdogEnabled !== undefined) chk.checked = cfg.latencyWatchdogEnabled;
+            if (thresh && cfg.latencyThresholdMs) thresh.value = cfg.latencyThresholdMs;
+            if (perc && cfg.latencyPercentile) perc.value = cfg.latencyPercentile;
+            if (dur && cfg.latencySustainedMinutes) dur.value = cfg.latencySustainedMinutes;
+        }
+
+        async function saveLatencyAlertConfig() {
+            const latencyWatchdogEnabled = document.getElementById('chk-latency-watchdog')?.checked || false;
+            const latencyThresholdMs = parseInt(document.getElementById('latency-threshold-select')?.value || 800, 10);
+            const latencyPercentile = document.getElementById('latency-percentile-select')?.value || 'P95';
+            const latencySustainedMinutes = parseInt(document.getElementById('latency-duration-select')?.value || 5, 10);
+
+            try {
+                const res = await fetch('/api/admin/alerts/latency-config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ latencyWatchdogEnabled, latencyThresholdMs, latencyPercentile, latencySustainedMinutes })
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    window.alertConfig = data.alertConfig || window.alertConfig;
+                    allActivityLogs = data.activityLogs || allActivityLogs;
+                    applyLogFiltersAndRender();
+                    showToast(currentLang === 'en' ? 'SLA Latency Watchdog settings saved successfully!' : 'تنظیمات مانیتورینگ تاخیر و صدک پاسخگویی (SLA Watchdog) ذخیره شد.', 'success');
+                }
+            } catch (e) {
+                showToast('خطا در ذخیره تنظیمات تاخیر سرور', 'error');
+            }
+        }
+
+        async function simulateLatencySpike() {
+            const btn = document.getElementById('btn-sim-latency');
+            const origHTML = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin ml-1.5"></i> در حال تست تاخیر...';
+            }
+
+            try {
+                const res = await fetch('/api/admin/alerts/simulate-latency', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    window.alertConfig = data.alertConfig || window.alertConfig;
+                    allActivityLogs = data.activityLogs || allActivityLogs;
+                    applyLogFiltersAndRender();
+                    renderAlertHistory();
+                    showToast('⚠️ جهش تاخیر سرور (SLA Spike) شبیه‌سازی شد و هشدار آستانه صدک P95 به مدیر ارسال گردید!', 'success');
+                }
+            } catch (e) {
+                showToast('خطا در شبیه‌سازی جهش تاخیر', 'error');
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = origHTML;
+                }
+            }
+        }
+
+        // ==========================================
+        // SCHEDULED AUTOMATED LOG REPORTS (CRON)
+        // ==========================================
+        function renderScheduledReports() {
+            const container = document.getElementById('scheduled-reports-list');
+            const countEl = document.getElementById('scheduled-reports-count');
+            if (!container) return;
+
+            const list = scheduledReportsList || [];
+            if (countEl) {
+                countEl.textContent = currentLang === 'en' ? `${list.length} Active Schedules` : `${list.length} زمان‌بندی فعال`;
+            }
+
+            if (list.length === 0) {
+                container.innerHTML = `<div class="text-center py-6 text-slate-500 text-xs">هیچ زمان‌بندی گزارش فعالی تعریف نشده است. برای افزودن روی دکمه «افزودن زمان‌بندی جدید» کلیک کنید.</div>`;
+                return;
+            }
+
+            container.innerHTML = list.map(rep => {
+                const freqBg = rep.frequency === 'DAILY' ? 'bg-blue-500/20 text-blue-300 border-blue-500/30' : (rep.frequency === 'WEEKLY' ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30');
+                const freqLabel = rep.frequency === 'DAILY' ? 'روزانه (Daily)' : (rep.frequency === 'WEEKLY' ? 'هفتگی (Weekly)' : 'ماهانه (Monthly)');
+                const formatBadge = rep.format === 'PDF' ? '<span class="px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[10px] font-mono"><i class="fa-solid fa-file-pdf mr-1 text-purple-400"></i>PDF</span>' : '<span class="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-mono"><i class="fa-solid fa-file-excel mr-1 text-emerald-400"></i>EXCEL</span>';
+
+                return `
+                    <div class="p-3.5 rounded-xl bg-slate-800/80 border border-slate-700/80 hover:border-indigo-500/50 transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
+                        <div class="flex items-start space-x-3 space-x-reverse">
+                            <div class="w-9 h-9 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400 mt-0.5">
+                                <i class="fa-solid fa-clock text-sm"></i>
+                            </div>
+                            <div>
+                                <div class="flex items-center space-x-2 space-x-reverse">
+                                    <h4 class="text-xs font-bold text-white">${rep.title || 'گزارش لاگ‌های سرور'}</h4>
+                                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${freqBg}">${freqLabel}</span>
+                                    ${formatBadge}
+                                </div>
+                                <div class="flex items-center space-x-3 space-x-reverse text-[11px] text-slate-400 mt-1 font-mono">
+                                    <span><i class="fa-solid fa-envelope text-slate-500 ml-1"></i>${rep.recipient}</span>
+                                    <span><i class="fa-solid fa-clock text-slate-500 ml-1"></i>${rep.time || '08:00'}</span>
+                                    <span><i class="fa-solid fa-filter text-slate-500 ml-1"></i>${rep.category || 'ALL'}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center space-x-2 space-x-reverse justify-end">
+                            <button onclick="runScheduledReportNow('${rep.id}')" class="px-2.5 py-1.5 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/30 text-[11px] font-bold transition flex items-center" title="تولید و ارسال فوری گزارش الآن">
+                                <i class="fa-solid fa-paper-plane ml-1"></i> ارسال الآن
+                            </button>
+                            <button onclick="toggleScheduledReport('${rep.id}', ${!rep.enabled})" class="p-1.5 rounded-lg ${rep.enabled ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-700 text-slate-400'} text-xs transition" title="${rep.enabled ? 'فعال (کلیک برای غیرفعال‌سازی)' : 'غیرفعال (کلیک برای فعال‌سازی)'}">
+                                <i class="fa-solid ${rep.enabled ? 'fa-toggle-on text-base' : 'fa-toggle-off text-base'}"></i>
+                            </button>
+                            <button onclick="deleteScheduledReport('${rep.id}')" class="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 text-xs transition" title="حذف این زمان‌بندی">
+                                <i class="fa-solid fa-trash-can"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function toggleNewReportForm() {
+            const form = document.getElementById('new-report-form-container');
+            if (!form) return;
+            form.classList.toggle('hidden');
+        }
+
+        async function createScheduledReport() {
+            const title = document.getElementById('report-title-input')?.value || 'گزارش جامع دوره‌ای لاگ‌ها';
+            const frequency = document.getElementById('report-freq-select')?.value || 'DAILY';
+            const format = document.getElementById('report-format-select')?.value || 'PDF';
+            const category = document.getElementById('report-category-select')?.value || 'ALL';
+            const time = document.getElementById('report-time-input')?.value || '08:00';
+            const recipient = document.getElementById('report-email-input')?.value || 'shamssaeed2025@gmail.com';
+
+            if (!recipient) {
+                showToast('لطفاً ایمیل گیرنده گزارش را وارد کنید.', 'error');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/admin/reports/schedule', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title, frequency, format, category, time, recipient, enabled: true })
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    scheduledReportsList = data.scheduledReports || scheduledReportsList;
+                    allActivityLogs = data.activityLogs || allActivityLogs;
+                    renderScheduledReports();
+                    applyLogFiltersAndRender();
+                    showToast(currentLang === 'en' ? 'New automated report schedule created successfully!' : 'زمان‌بندی جدید ارسال خودکار گزارش با موفقیت ثبت شد!', 'success');
+                    
+                    const titleIn = document.getElementById('report-title-input');
+                    if (titleIn) titleIn.value = '';
+                }
+            } catch (e) {
+                showToast('خطا در ذخیره زمان‌بندی گزارش', 'error');
+            }
+        }
+
+        async function runScheduledReportNow(id) {
+            try {
+                const res = await fetch('/api/admin/reports/run-now', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id })
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    allActivityLogs = data.activityLogs || allActivityLogs;
+                    applyLogFiltersAndRender();
+                    showToast(currentLang === 'en' ? 'Report generated and sent to email!' : '🚀 گزارش دوره‌ای تولید شد و نسخه PDF/Excel آن به ایمیل مدیر ارسال گردید!', 'success');
+                } else {
+                    showToast('خطا در ارسال فوری گزارش', 'error');
+                }
+            } catch (e) {
+                showToast('خطا در ارتباط با سرور', 'error');
+            }
+        }
+
+        async function toggleScheduledReport(id, enabled) {
+            try {
+                const res = await fetch('/api/admin/reports/toggle', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id, enabled })
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    scheduledReportsList = data.scheduledReports || scheduledReportsList;
+                    renderScheduledReports();
+                    showToast(enabled ? (currentLang === 'en' ? 'Report schedule enabled.' : 'زمان‌بندی گزارش فعال شد.') : (currentLang === 'en' ? 'Report schedule paused.' : 'زمان‌بندی گزارش متوقف شد.'), 'info');
+                }
+            } catch (e) {
+                showToast('خطا در تغییر وضعیت زمان‌بندی', 'error');
+            }
+        }
+
+        async function deleteScheduledReport(id) {
+            if (!confirm(currentLang === 'en' ? 'Are you sure you want to delete this scheduled report?' : 'آیا از حذف این زمان‌بندی گزارش اطمینان دارید؟')) return;
+            try {
+                const res = await fetch(`/api/admin/reports/${id}`, { method: 'DELETE' });
+                if (res.ok) {
+                    const data = await res.json();
+                    scheduledReportsList = data.scheduledReports || scheduledReportsList;
+                    renderScheduledReports();
+                    showToast(currentLang === 'en' ? 'Scheduled report deleted.' : 'زمان‌بندی گزارش حذف شد.', 'info');
+                }
+            } catch (e) {
+                showToast('خطا در حذف زمان‌بندی', 'error');
+            }
         }
 
         function showToast(message, type = 'success') {

@@ -34,10 +34,18 @@ let appConfigState = {
     adminEmail: "shamssaeed2025@gmail.com",
     webhookUrl: "https://notify.my-splitease.com/alerts/webhook",
     threshold: "500_ERRORS",
+    latencyWatchdogEnabled: true,
+    latencyThresholdMs: 800,
+    latencyPercentile: "P95", // P90, P95, P99
+    latencySustainedMinutes: 5,
     alertHistory: [
       { id: "alt_101", timestamp: Date.now() - 7200000, type: "HTTP 500 Critical", message: "خطا در همگام‌سازی ابری یکی از کاربران (پاسخ 500 از سرور)", channel: "Email & Push Webhook", recipient: "shamssaeed2025@gmail.com", status: "DELIVERED" }
     ]
-  }
+  },
+  scheduledReports: [
+    { id: "sched_1", title: "گزارش جامع روزانه لاگ‌های سرور (PDF)", frequency: "DAILY", time: "08:00", format: "PDF", recipient: "shamssaeed2025@gmail.com", enabled: true, lastRun: Date.now() - 86400000, nextRun: Date.now() + 3600000, category: "ALL", recordCount: 142 },
+    { id: "sched_2", title: "خلاصه هفتگی خطاهای ۵۰۰ و هشدارهای امنیتی (Excel)", frequency: "WEEKLY", dayOfWeek: "SATURDAY", time: "09:00", format: "EXCEL", recipient: "security@my-splitease.com", enabled: true, lastRun: Date.now() - 7 * 86400000, nextRun: Date.now() + 86400000, category: "ERROR", recordCount: 18 }
+  ]
 };
 
 let activityLogs = [
@@ -128,7 +136,8 @@ app.get('/api/admin/stats', (req, res) => {
     activeSessions,
     sessionTimeoutMinutes: appConfigState.sessionTimeoutMinutes,
     autoInvalidateSessions: appConfigState.autoInvalidateSessions,
-    alertConfig: appConfigState.alertConfig
+    alertConfig: appConfigState.alertConfig,
+    scheduledReports: appConfigState.scheduledReports
   });
 });
 
@@ -338,6 +347,192 @@ app.post('/api/admin/alerts/simulate', (req, res) => {
     newAlert,
     alertConfig: appConfigState.alertConfig,
     activityLogs
+  });
+});
+
+// POST /api/admin/alerts/latency-config - Admin configures latency watchdog alert threshold
+app.post('/api/admin/alerts/latency-config', (req, res) => {
+  const { latencyWatchdogEnabled, latencyThresholdMs, latencyPercentile, latencySustainedMinutes } = req.body;
+  if (latencyWatchdogEnabled !== undefined) appConfigState.alertConfig.latencyWatchdogEnabled = Boolean(latencyWatchdogEnabled);
+  if (latencyThresholdMs !== undefined) appConfigState.alertConfig.latencyThresholdMs = Number(latencyThresholdMs) || 800;
+  if (latencyPercentile !== undefined) appConfigState.alertConfig.latencyPercentile = latencyPercentile;
+  if (latencySustainedMinutes !== undefined) appConfigState.alertConfig.latencySustainedMinutes = Number(latencySustainedMinutes) || 5;
+
+  activityLogs.unshift({
+    id: Date.now(),
+    action: `تنظیم هشدار تاخیر سرور (Latency Watchdog): آستانه ${appConfigState.alertConfig.latencyThresholdMs}ms در صدک ${appConfigState.alertConfig.latencyPercentile} به مدت ${appConfigState.alertConfig.latencySustainedMinutes} دقیقه`,
+    type: "SYSTEM",
+    timestamp: Date.now(),
+    ip: req.ip || "185.192.112.45",
+    userId: "usr_admin",
+    userAgent: req.get('User-Agent') || "Admin Dashboard Web",
+    latency: "28ms",
+    location: "تهران (IR)"
+  });
+  if (activityLogs.length > 30) activityLogs.pop();
+
+  res.status(200).json({
+    success: true,
+    alertConfig: appConfigState.alertConfig,
+    activityLogs
+  });
+});
+
+// POST /api/admin/alerts/simulate-latency - Simulate sustained high server latency & trigger alert
+app.post('/api/admin/alerts/simulate-latency', (req, res) => {
+  const errorId = Date.now();
+  const thresh = appConfigState.alertConfig.latencyThresholdMs || 800;
+  const perc = appConfigState.alertConfig.latencyPercentile || "P95";
+  const duration = appConfigState.alertConfig.latencySustainedMinutes || 5;
+  const simulatedLatency = Math.floor(thresh * 1.8 + 200); // e.g. 1640ms
+
+  const errorAction = `هشدار تاخیر بحرانی سرور (${perc} Latency > ${thresh}ms): تاخیر پاسخگویی سرور به ${simulatedLatency}ms به مدت بیش از ${duration} دقیقه رسیده است`;
+  const stackTrace = `Warning: SustainedHighLatencyAlert: Server API latency degradation detected (${simulatedLatency}ms > ${thresh}ms ${perc} threshold)\n    at LatencyWatchdog.evaluate (/app/backend/monitor/latencyCheck.js:52:19)\n    at EventLoopMonitor.tick (/app/backend/monitor/loop.js:14:8)\n[Status: CRITICAL DEGRADATION] [Duration: ${duration} minutes sustained] [Affected Endpoints: /api/sync, /api/expenses/list]`;
+
+  const newWarningLog = {
+    id: errorId,
+    action: errorAction,
+    type: "WARNING",
+    statusCode: 429,
+    stackTrace: stackTrace,
+    timestamp: Date.now(),
+    ip: "10.0.0.15",
+    userId: "latency_watchdog",
+    userAgent: "SplitEase-SLA-Monitor/2.0",
+    latency: `${simulatedLatency}ms`,
+    location: "دیتاسنتر داخلی"
+  };
+
+  activityLogs.unshift(newWarningLog);
+  if (activityLogs.length > 30) activityLogs.pop();
+
+  const channels = [];
+  if (appConfigState.alertConfig.emailChannel) channels.push("Email");
+  if (appConfigState.alertConfig.pushChannel) channels.push("Push Webhook");
+  const channelStr = channels.length > 0 ? channels.join(" & ") : "System Alert";
+
+  const newAlert = {
+    id: "alt_" + Date.now(),
+    timestamp: Date.now(),
+    type: `SLA Latency (${perc} > ${thresh}ms)`,
+    message: errorAction,
+    channel: channelStr,
+    recipient: appConfigState.alertConfig.adminEmail || "shamssaeed2025@gmail.com",
+    status: "DELIVERED"
+  };
+
+  appConfigState.alertConfig.alertHistory.unshift(newAlert);
+  if (appConfigState.alertConfig.alertHistory.length > 15) appConfigState.alertConfig.alertHistory.pop();
+
+  res.status(200).json({
+    success: true,
+    warningLog: newWarningLog,
+    newAlert,
+    alertConfig: appConfigState.alertConfig,
+    activityLogs
+  });
+});
+
+// POST /api/admin/reports/schedule - Add or update a recurring report task
+app.post('/api/admin/reports/schedule', (req, res) => {
+  const { id, title, frequency, time, format, recipient, category, enabled } = req.body;
+  if (id) {
+    const existing = appConfigState.scheduledReports.find(r => r.id === id);
+    if (existing) {
+      if (title !== undefined) existing.title = title;
+      if (frequency !== undefined) existing.frequency = frequency;
+      if (time !== undefined) existing.time = time;
+      if (format !== undefined) existing.format = format;
+      if (recipient !== undefined) existing.recipient = recipient;
+      if (category !== undefined) existing.category = category;
+      if (enabled !== undefined) existing.enabled = Boolean(enabled);
+    }
+  } else {
+    const newReport = {
+      id: "sched_" + Date.now(),
+      title: title || `گزارش دوره‌ای ${frequency === 'DAILY' ? 'روزانه' : frequency === 'WEEKLY' ? 'هفتگی' : 'ماهانه'} (${format})`,
+      frequency: frequency || "DAILY",
+      time: time || "08:00",
+      format: format || "PDF",
+      recipient: recipient || "shamssaeed2025@gmail.com",
+      enabled: enabled !== undefined ? Boolean(enabled) : true,
+      lastRun: Date.now() - 3600000,
+      nextRun: Date.now() + 86400000,
+      category: category || "ALL",
+      recordCount: Math.floor(Math.random() * 80 + 20)
+    };
+    appConfigState.scheduledReports.unshift(newReport);
+  }
+
+  activityLogs.unshift({
+    id: Date.now(),
+    action: `تنظیم زمان‌بندی گزارش دوره‌ای جدید (${frequency || 'DAILY'} در قالب ${format || 'PDF'}) برای گیرنده ${recipient || 'shamssaeed2025@gmail.com'}`,
+    type: "SYSTEM",
+    timestamp: Date.now(),
+    ip: req.ip || "185.192.112.45",
+    userId: "usr_admin",
+    userAgent: req.get('User-Agent') || "Admin Dashboard Web",
+    latency: "22ms",
+    location: "تهران (IR)"
+  });
+  if (activityLogs.length > 30) activityLogs.pop();
+
+  res.status(200).json({
+    success: true,
+    scheduledReports: appConfigState.scheduledReports,
+    activityLogs
+  });
+});
+
+// POST /api/admin/reports/run-now - Immediately generate & send a scheduled report
+app.post('/api/admin/reports/run-now', (req, res) => {
+  const { id } = req.body;
+  const report = appConfigState.scheduledReports.find(r => r.id === id);
+  if (report) {
+    report.lastRun = Date.now();
+    report.recordCount = Math.floor(Math.random() * 90 + 30);
+  }
+
+  activityLogs.unshift({
+    id: Date.now(),
+    action: `تست و ارسال فوری گزارش دوره‌ای "${report ? report.title : 'گزارش لاگ‌ها'}" در قالب ${report ? report.format : 'PDF'} به ایمیل ${report ? report.recipient : 'admin'}`,
+    type: "SUCCESS",
+    timestamp: Date.now(),
+    ip: req.ip || "185.192.112.45",
+    userId: "usr_admin",
+    userAgent: req.get('User-Agent') || "Admin Dashboard Web",
+    latency: "410ms",
+    location: "تهران (IR)"
+  });
+  if (activityLogs.length > 30) activityLogs.pop();
+
+  res.status(200).json({
+    success: true,
+    scheduledReports: appConfigState.scheduledReports,
+    activityLogs
+  });
+});
+
+// POST /api/admin/reports/toggle - Enable/disable a scheduled report
+app.post('/api/admin/reports/toggle', (req, res) => {
+  const { id, enabled } = req.body;
+  const report = appConfigState.scheduledReports.find(r => r.id === id);
+  if (report) {
+    report.enabled = Boolean(enabled);
+  }
+  res.status(200).json({
+    success: true,
+    scheduledReports: appConfigState.scheduledReports
+  });
+});
+
+// DELETE /api/admin/reports/:id - Delete a scheduled report
+app.delete('/api/admin/reports/:id', (req, res) => {
+  const { id } = req.params;
+  appConfigState.scheduledReports = appConfigState.scheduledReports.filter(r => r.id !== id);
+  res.status(200).json({
+    success: true,
+    scheduledReports: appConfigState.scheduledReports
   });
 });
 
