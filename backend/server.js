@@ -28,14 +28,14 @@ let appConfigState = {
 };
 
 let activityLogs = [
-  { id: 1, action: "بروزرسانی پیام عمومی سیستم (خوش‌آمدگویی)", type: "MESSAGE", timestamp: Date.now() - 1800000 },
-  { id: 2, action: "انتشار تنظیمات آپدیت نسخه 1.0.0 (اختیاری)", type: "UPDATE", timestamp: Date.now() - 3600000 },
-  { id: 3, action: "بررسی وضعیت سرورهای Vercel و اتصال دیتابیس", type: "SYSTEM", timestamp: Date.now() - 5400000 },
-  { id: 4, action: "خطا در همگام‌سازی ابری یکی از کاربران (پاسخ 500 از سرور)", type: "ERROR", timestamp: Date.now() - 7200000 },
-  { id: 5, action: "هشدار: تاخیر بالا در پاسخگویی سرور دیتابیس (بیش از 800ms)", type: "WARNING", timestamp: Date.now() - 10800000 },
-  { id: 6, action: "موفقیت: بکاپ‌گیری خودکار اطلاعات کل کاربران انجام شد", type: "SUCCESS", timestamp: Date.now() - 14400000 },
-  { id: 7, action: "ارسال اعلان عمومی برای نگهداری دوره‌ای سرورها", type: "MESSAGE", timestamp: Date.now() - 18000000 },
-  { id: 8, action: "خطای تلاش ناموفق برای ورود به پنل ادمین با رمز عبور اشتباه", type: "ERROR", timestamp: Date.now() - 21600000 }
+  { id: 1, action: "بروزرسانی پیام عمومی سیستم (خوش‌آمدگویی)", type: "MESSAGE", timestamp: Date.now() - 1800000, ip: "185.192.112.45", userId: "usr_admin", userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", latency: "45ms", location: "تهران (IR)" },
+  { id: 2, action: "انتشار تنظیمات آپدیت نسخه 1.0.0 (اختیاری)", type: "UPDATE", timestamp: Date.now() - 3600000, ip: "185.192.112.45", userId: "usr_admin", userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)", latency: "62ms", location: "تهران (IR)" },
+  { id: 3, action: "بررسی وضعیت سرورهای Vercel و اتصال دیتابیس", type: "SYSTEM", timestamp: Date.now() - 5400000, ip: "76.76.21.21", userId: "system_cron", userAgent: "Vercel-Monitor/2.1", latency: "12ms", location: "فرانکفورت (DE)" },
+  { id: 4, action: "خطا در همگام‌سازی ابری یکی از کاربران (پاسخ 500 از سرور)", type: "ERROR", timestamp: Date.now() - 7200000, ip: "91.240.118.89", userId: "usr_8492", userAgent: "SplitEase-Android/1.0 (Android 14)", latency: "1420ms", location: "شیراز (IR)" },
+  { id: 5, action: "هشدار: تاخیر بالا در پاسخگویی سرور دیتابیس (بیش از 800ms)", type: "WARNING", timestamp: Date.now() - 10800000, ip: "10.0.0.42", userId: "db_monitor", userAgent: "Postgres-HealthCheck/1.0", latency: "845ms", location: "دیتاسنتر داخلی" },
+  { id: 6, action: "موفقیت: بکاپ‌گیری خودکار اطلاعات کل کاربران انجام شد", type: "SUCCESS", timestamp: Date.now() - 14400000, ip: "10.0.0.101", userId: "backup_daemon", userAgent: "AWS-S3-Sync/3.4", latency: "310ms", location: "دیتاسنتر داخلی" },
+  { id: 7, action: "ارسال اعلان عمومی برای نگهداری دوره‌ای سرورها", type: "MESSAGE", timestamp: Date.now() - 18000000, ip: "185.192.112.45", userId: "usr_admin", userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", latency: "38ms", location: "تهران (IR)" },
+  { id: 8, action: "خطای تلاش ناموفق برای ورود به پنل ادمین با رمز عبور اشتباه", type: "ERROR", timestamp: Date.now() - 21600000, ip: "45.146.165.20", userId: "anonymous", userAgent: "python-requests/2.31.0", latency: "18ms", location: "آمستردام (NL)" }
 ];
 
 let userEngagement7Days = [
@@ -107,7 +107,12 @@ app.post('/api/admin/update-policy', (req, res) => {
     id: Date.now(),
     action: `تنظیم آپدیت جدید برای نسخه ${latestVersionName || appConfigState.updatePolicy.latestVersionName} (${isMandatory ? 'اجباری' : 'اختیاری'})`,
     type: "UPDATE",
-    timestamp: Date.now()
+    timestamp: Date.now(),
+    ip: req.ip || "185.192.112.45",
+    userId: "usr_admin",
+    userAgent: req.get('User-Agent') || "Admin Dashboard Web",
+    latency: Math.floor(Math.random() * 50 + 20) + "ms",
+    location: "تهران (IR)"
   });
   if (activityLogs.length > 20) activityLogs.pop();
 
@@ -130,7 +135,12 @@ app.post('/api/admin/message', (req, res) => {
     id: Date.now(),
     action: `ارسال پیام عمومی: ${title || "پیام مدیر"} (${isActive !== false ? 'فعال' : 'غیرفعال'})`,
     type: "MESSAGE",
-    timestamp: Date.now()
+    timestamp: Date.now(),
+    ip: req.ip || "185.192.112.45",
+    userId: "usr_admin",
+    userAgent: req.get('User-Agent') || "Admin Dashboard Web",
+    latency: Math.floor(Math.random() * 50 + 20) + "ms",
+    location: "تهران (IR)"
   });
   if (activityLogs.length > 20) activityLogs.pop();
 

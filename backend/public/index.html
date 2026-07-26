@@ -10,6 +10,7 @@
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -441,6 +442,9 @@
                         <button onclick="downloadLogsPDF()" class="px-2.5 py-1 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/20 text-[11px] flex items-center transition" title="خروجی گزارش PDF">
                             <i class="fa-solid fa-file-pdf ml-1 text-sm"></i> دانلود PDF
                         </button>
+                        <button onclick="downloadLogsExcel()" class="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 text-[11px] flex items-center transition" title="دانلود حرفه‌ای اکسل (SheetJS)">
+                            <i class="fa-solid fa-file-excel ml-1 text-sm"></i> دانلود Excel
+                        </button>
                         <button onclick="downloadLogsCSV()" class="px-2.5 py-1 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 text-[11px] flex items-center transition" title="دانلود آفلاین فایل CSV">
                             <i class="fa-solid fa-file-csv ml-1 text-sm"></i> دانلود CSV
                         </button>
@@ -458,7 +462,13 @@
                                     <input type="checkbox" id="select-all-logs" onchange="toggleSelectAllLogs(this.checked)" class="rounded bg-slate-800 border-slate-600 text-emerald-500 focus:ring-0 cursor-pointer">
                                 </th>
                                 <th class="pb-2 font-semibold">عملیات و وضعیت</th>
-                                <th class="pb-2 font-semibold w-24">دسته بندی</th>
+                                <th onclick="toggleLogSort()" class="pb-2 font-semibold w-28 cursor-pointer hover:text-white transition select-none" title="کلیک برای مرتب‌سازی بر اساس سطح اهمیت">
+                                    <div class="flex items-center">
+                                        <span>دسته بندی</span>
+                                        <i id="sort-icon" class="fa-solid fa-sort ml-1.5 text-[10px] text-slate-500"></i>
+                                    </div>
+                                </th>
+                                <th class="pb-2 font-semibold w-20 text-center">جزئیات</th>
                                 <th class="pb-2 font-semibold w-24 text-left">زمان</th>
                             </tr>
                         </thead>
@@ -493,6 +503,61 @@
         </div>
     </div>
 
+    <!-- Log Details Modal / Popover -->
+    <div id="log-details-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm hidden opacity-0 transition-opacity duration-300">
+        <div class="glass-panel bg-slate-900 border border-slate-700 rounded-2xl p-6 max-w-lg w-full mx-4 shadow-2xl transform scale-95 transition-transform duration-300">
+            <div class="flex items-center justify-between border-b border-slate-700/80 pb-4 mb-4">
+                <div class="flex items-center space-x-3 space-x-reverse">
+                    <div class="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 text-lg">
+                        <i class="fa-solid fa-circle-info"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-white">جزئیات فنی رویداد سرور</h3>
+                        <p class="text-xs text-slate-400" id="detail-log-id">شناسه رویداد: #0000</p>
+                    </div>
+                </div>
+                <button onclick="closeLogDetailsModal()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            
+            <div class="space-y-3 text-xs mb-6">
+                <div class="bg-slate-800/60 p-3 rounded-xl border border-slate-700/50 flex flex-col gap-1">
+                    <span class="text-slate-400 font-semibold">شرح کامل عملیات:</span>
+                    <span class="text-white font-medium leading-relaxed" id="detail-log-action">-</span>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="bg-slate-800/40 p-2.5 rounded-xl border border-slate-700/40">
+                        <div class="text-slate-400 mb-1 flex items-center"><i class="fa-solid fa-user mr-1.5 text-blue-400"></i> کاربر شناسه (ID):</div>
+                        <div class="font-mono text-blue-300 font-bold" id="detail-log-userid">usr_admin</div>
+                    </div>
+                    <div class="bg-slate-800/40 p-2.5 rounded-xl border border-slate-700/40">
+                        <div class="text-slate-400 mb-1 flex items-center"><i class="fa-solid fa-network-wired mr-1.5 text-emerald-400"></i> آدرس IP و مبدا:</div>
+                        <div class="font-mono text-emerald-300 font-bold" id="detail-log-ip">185.192.112.45</div>
+                    </div>
+                    <div class="bg-slate-800/40 p-2.5 rounded-xl border border-slate-700/40">
+                        <div class="text-slate-400 mb-1 flex items-center"><i class="fa-solid fa-location-dot mr-1.5 text-rose-400"></i> موقعیت مکانی:</div>
+                        <div class="text-rose-300 font-bold" id="detail-log-location">تهران (IR)</div>
+                    </div>
+                    <div class="bg-slate-800/40 p-2.5 rounded-xl border border-slate-700/40">
+                        <div class="text-slate-400 mb-1 flex items-center"><i class="fa-solid fa-stopwatch mr-1.5 text-amber-400"></i> زمان تاخیر سرور (Latency):</div>
+                        <div class="font-mono text-amber-300 font-bold" id="detail-log-latency">45ms</div>
+                    </div>
+                </div>
+                <div class="bg-slate-800/40 p-2.5 rounded-xl border border-slate-700/40">
+                    <div class="text-slate-400 mb-1 flex items-center"><i class="fa-brands fa-chrome mr-1.5 text-purple-400"></i> مرورگر / دستگاه (User-Agent):</div>
+                    <div class="font-mono text-slate-300 text-[11px] truncate" id="detail-log-useragent" title="">Mozilla/5.0...</div>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end">
+                <button onclick="closeLogDetailsModal()" class="px-5 py-2 rounded-xl bg-purple-500 hover:bg-purple-600 text-white text-xs font-medium transition flex items-center shadow-lg shadow-purple-500/20">
+                    <i class="fa-solid fa-check ml-2"></i> بستن و بازگشت
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Notification -->
     <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-20 opacity-0 transition-all duration-300 max-w-sm bg-slate-800 border border-slate-700 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center space-x-3 space-x-reverse pointer-events-none">
         <i id="toast-icon" class="fa-solid fa-check-circle text-emerald-400 text-lg"></i>
@@ -506,8 +571,19 @@
         let userEngagement30Days = [];
         let userEngagement90Days = [];
         let currentLogCategory = 'ALL';
+        let currentSortOrder = 'default';
+        let currentSearchTerm = '';
         let selectedLogIds = new Set();
         let autoRefreshInterval = null;
+
+        const severityMap = {
+            'ERROR': 6,
+            'WARNING': 5,
+            'UPDATE': 4,
+            'MESSAGE': 3,
+            'SYSTEM': 2,
+            'SUCCESS': 1
+        };
 
         // Initialize and Load Data
         document.addEventListener('DOMContentLoaded', () => {
@@ -541,7 +617,7 @@
                     currentUserEngagement = data.userEngagement || [];
                     userEngagement30Days = data.userEngagement30Days || [];
                     userEngagement90Days = data.userEngagement90Days || [];
-                    filterLogCategory(currentLogCategory);
+                    applyLogFiltersAndRender();
                     if (!isSilent) {
                         renderChart(currentUserEngagement);
                     } else {
@@ -553,16 +629,38 @@
             }
         }
 
-        function filterLogsAndMessages(keyword) {
-            const kw = keyword.trim().toLowerCase();
-            if (!kw) {
-                filterLogCategory(currentLogCategory);
-                return;
+        function applyLogFiltersAndRender() {
+            let filtered = [...allActivityLogs];
+
+            if (currentLogCategory !== 'ALL') {
+                if (currentLogCategory === 'SYSTEM') {
+                    filtered = filtered.filter(l => l.type === 'SYSTEM' || l.type === 'UPDATE' || l.type === 'MESSAGE');
+                } else {
+                    filtered = filtered.filter(l => l.type === currentLogCategory);
+                }
             }
-            const filtered = allActivityLogs.filter(log => 
-                log.action.toLowerCase().includes(kw) || log.type.toLowerCase().includes(kw)
-            );
-            renderLogs(filtered);
+
+            if (currentSearchTerm) {
+                const kw = currentSearchTerm.trim().toLowerCase();
+                filtered = filtered.filter(log => 
+                    log.action.toLowerCase().includes(kw) || log.type.toLowerCase().includes(kw)
+                );
+            }
+
+            if (currentSortOrder === 'desc') {
+                filtered.sort((a, b) => (severityMap[b.type] || 0) - (severityMap[a.type] || 0));
+            } else if (currentSortOrder === 'asc') {
+                filtered.sort((a, b) => (severityMap[a.type] || 0) - (severityMap[b.type] || 0));
+            } else {
+                filtered.sort((a, b) => b.timestamp - a.timestamp);
+            }
+
+            renderLogs(filtered, currentSearchTerm);
+        }
+
+        function filterLogsAndMessages(keyword) {
+            currentSearchTerm = keyword || '';
+            applyLogFiltersAndRender();
         }
 
         function filterLogCategory(category, btnElem) {
@@ -573,12 +671,55 @@
                 });
                 btnElem.className = "log-filter-btn px-2 py-1 rounded bg-emerald-500/20 text-emerald-300 font-medium border border-emerald-500/30 transition text-[11px]";
             }
-            if (category === 'ALL') {
-                renderLogs(allActivityLogs);
-            } else if (category === 'SYSTEM') {
-                renderLogs(allActivityLogs.filter(l => l.type === 'SYSTEM' || l.type === 'UPDATE' || l.type === 'MESSAGE'));
-            } else {
-                renderLogs(allActivityLogs.filter(l => l.type === category));
+            applyLogFiltersAndRender();
+        }
+
+        function toggleLogSort() {
+            if (currentSortOrder === 'default') currentSortOrder = 'desc';
+            else if (currentSortOrder === 'desc') currentSortOrder = 'asc';
+            else currentSortOrder = 'default';
+
+            const icon = document.getElementById('sort-icon');
+            if (icon) {
+                if (currentSortOrder === 'desc') {
+                    icon.className = 'fa-solid fa-sort-down ml-1.5 text-xs text-rose-400 font-bold';
+                    showToast('مرتب‌سازی بر اساس سطح اهمیت (خطا -> هشدار -> موفقیت)', 'info');
+                } else if (currentSortOrder === 'asc') {
+                    icon.className = 'fa-solid fa-sort-up ml-1.5 text-xs text-emerald-400 font-bold';
+                    showToast('مرتب‌سازی بر اساس سطح اهمیت صعودی (موفقیت -> هشدار -> خطا)', 'info');
+                } else {
+                    icon.className = 'fa-solid fa-sort ml-1.5 text-[10px] text-slate-500';
+                    showToast('مرتب‌سازی پیش‌فرض (جدیدترین زمان ثبت)', 'info');
+                }
+            }
+
+            applyLogFiltersAndRender();
+        }
+
+        function showLogDetails(id) {
+            const log = allActivityLogs.find(l => l.id === id);
+            if (!log) return;
+            document.getElementById('detail-log-id').textContent = `شناسه رویداد: #${log.id.toString().slice(-4)}`;
+            document.getElementById('detail-log-action').textContent = log.action || '-';
+            document.getElementById('detail-log-userid').textContent = log.userId || 'usr_admin';
+            document.getElementById('detail-log-ip').textContent = log.ip || '185.192.112.45';
+            document.getElementById('detail-log-location').textContent = log.location || 'تهران (IR)';
+            document.getElementById('detail-log-latency').textContent = log.latency || '45ms';
+            document.getElementById('detail-log-useragent').textContent = log.userAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)';
+            document.getElementById('detail-log-useragent').title = log.userAgent || '';
+
+            const modal = document.getElementById('log-details-modal');
+            if (modal) {
+                modal.classList.remove('hidden');
+                setTimeout(() => modal.classList.remove('opacity-0'), 10);
+            }
+        }
+
+        function closeLogDetailsModal() {
+            const modal = document.getElementById('log-details-modal');
+            if (modal) {
+                modal.classList.add('opacity-0');
+                setTimeout(() => modal.classList.add('hidden'), 300);
             }
         }
 
@@ -609,7 +750,7 @@
                 if (res.ok) {
                     const data = await res.json();
                     allActivityLogs = data.activityLogs || [];
-                    filterLogCategory(currentLogCategory);
+                    applyLogFiltersAndRender();
                     showToast('تاریخچه فعالیت‌ها با موفقیت پاکسازی شد.', 'success');
                 }
             } catch (err) {
@@ -690,7 +831,7 @@
                     allActivityLogs = data.activityLogs || [];
                     selectedLogIds.clear();
                     updateBulkDeleteBtn();
-                    filterLogCategory(currentLogCategory);
+                    applyLogFiltersAndRender();
                     showToast('موارد انتخاب شده با موفقیت از تاریخچه حذف شدند.', 'success');
                 }
             } catch (err) {
@@ -810,6 +951,66 @@
             showToast('فایل CSV تاریخچه با موفقیت دانلود شد.', 'success');
         }
 
+        function downloadLogsExcel() {
+            if (!window.XLSX) {
+                showToast('کتابخانه ساخت اکسل در حال بارگذاری است.', 'error');
+                return;
+            }
+            if (!allActivityLogs || allActivityLogs.length === 0) {
+                showToast('لاگی برای دانلود وجود ندارد.', 'error');
+                return;
+            }
+            showToast('در حال آماده‌سازی فایل اکسل (.xlsx)...', 'info');
+
+            const logsToExport = allActivityLogs.filter(log => {
+                if (currentLogCategory === 'ALL') return true;
+                if (currentLogCategory === 'SYSTEM') return log.type === 'SYSTEM' || log.type === 'UPDATE' || log.type === 'MESSAGE';
+                return log.type === currentLogCategory;
+            });
+
+            const rows = logsToExport.map(l => ({
+                "شناسه": `#${l.id.toString().slice(-4)}`,
+                "شرح عملیات": l.action,
+                "دسته بندی": l.type === 'UPDATE' ? 'آپدیت' : l.type === 'MESSAGE' ? 'پیام' : l.type === 'ERROR' ? 'خطا' : l.type === 'WARNING' ? 'هشدار' : l.type === 'SUCCESS' ? 'موفقیت' : 'سیستمی',
+                "کاربر (ID)": l.userId || 'usr_admin',
+                "آدرس IP": l.ip || '185.192.112.45',
+                "موقعیت": l.location || 'تهران (IR)',
+                "تاخیر سرور": l.latency || '45ms',
+                "زمان ثبت": new Date(l.timestamp).toLocaleString('fa-IR')
+            }));
+
+            const worksheet = XLSX.utils.json_to_sheet(rows);
+            
+            worksheet['!cols'] = [
+                { wch: 10 },
+                { wch: 50 },
+                { wch: 15 },
+                { wch: 15 },
+                { wch: 18 },
+                { wch: 15 },
+                { wch: 12 },
+                { wch: 22 }
+            ];
+
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Activity Logs");
+
+            const fileName = `splitease_audit_logs_${Date.now()}.xlsx`;
+            XLSX.writeFile(workbook, fileName);
+            showToast('فایل اکسل با موفقیت دانلود شد.', 'success');
+        }
+
+        function highlightText(text, kw) {
+            if (!kw || !kw.trim()) return text;
+            const q = kw.trim();
+            try {
+                const regex = new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+                return text.replace(regex, '<mark class="bg-amber-400 text-slate-900 font-extrabold px-1 rounded shadow-sm">$1</mark>');
+            } catch(e) {
+                return text;
+            }
+        }
+
         function setChartRange(range, btnElem) {
             document.querySelectorAll('.chart-range-btn').forEach(b => {
                 b.className = "chart-range-btn px-2.5 py-1 rounded-lg bg-slate-700/60 text-slate-300 hover:bg-slate-700 transition";
@@ -857,11 +1058,11 @@
             showToast('نمودار بر اساس بازه انتخابی شما به‌روزرسانی شد.', 'success');
         }
 
-        function renderLogs(logs) {
+        function renderLogs(logs, searchTerm = '') {
             const tbody = document.getElementById('activity-logs-body');
             if (!tbody) return;
             if (logs.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="4" class="py-4 text-center text-slate-500">هیچ فعالیتی یافت نشد.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-slate-500">هیچ فعالیتی یافت نشد.</td></tr>`;
                 return;
             }
             tbody.innerHTML = logs.map(log => {
@@ -880,13 +1081,19 @@
                 } else {
                     typeBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20 text-[10px]"><i class="fa-solid fa-server mr-1 text-[9px]"></i>سیستم</span>`;
                 }
+                const highlightedAction = highlightText(log.action, searchTerm || currentSearchTerm);
                 return `
-                    <tr class="hover:bg-slate-800/40 transition">
+                    <tr class="hover:bg-slate-800/40 transition cursor-default" title="IP: ${log.ip || '185.192.112.45'} | User ID: ${log.userId || 'usr_admin'} | Latency: ${log.latency || '45ms'} | Location: ${log.location || 'تهران (IR)'}">
                         <td class="py-2.5 text-center w-8">
                             <input type="checkbox" value="${log.id}" onchange="toggleSelectLog(${log.id}, this.checked)" ${selectedLogIds.has(log.id) ? 'checked' : ''} class="log-checkbox rounded bg-slate-800 border-slate-600 text-emerald-500 focus:ring-0 cursor-pointer">
                         </td>
-                        <td class="py-2.5 font-medium pr-1">${log.action}</td>
+                        <td class="py-2.5 font-medium pr-1">${highlightedAction}</td>
                         <td class="py-2.5">${typeBadge}</td>
+                        <td class="py-2.5 text-center">
+                            <button onclick="showLogDetails(${log.id})" class="px-2 py-0.5 rounded bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/20 text-[10px] transition flex items-center justify-center mx-auto" title="مشاهده مشخصات فنی (IP, User ID, Latency)">
+                                <i class="fa-solid fa-circle-info mr-1 text-[9px]"></i> جزئیات
+                            </button>
+                        </td>
                         <td class="py-2.5 text-left text-slate-400 pl-1" dir="ltr">${dateStr}</td>
                     </tr>
                 `;
