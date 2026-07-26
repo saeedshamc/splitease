@@ -28,12 +28,17 @@ let appConfigState = {
 };
 
 let activityLogs = [
-  { id: 1, action: "بروزرسانی پیام عمومی سیستم (خوش‌آمدگویی)", type: "MESSAGE", timestamp: Date.now() - 3600000 },
-  { id: 2, action: "انتشار تنظیمات آپدیت نسخه 1.0.0 (اختیاری)", type: "UPDATE", timestamp: Date.now() - 7200000 },
-  { id: 3, action: "بررسی وضعیت سرورهای Vercel و اتصال دیتابیس", type: "SYSTEM", timestamp: Date.now() - 10800000 }
+  { id: 1, action: "بروزرسانی پیام عمومی سیستم (خوش‌آمدگویی)", type: "MESSAGE", timestamp: Date.now() - 1800000 },
+  { id: 2, action: "انتشار تنظیمات آپدیت نسخه 1.0.0 (اختیاری)", type: "UPDATE", timestamp: Date.now() - 3600000 },
+  { id: 3, action: "بررسی وضعیت سرورهای Vercel و اتصال دیتابیس", type: "SYSTEM", timestamp: Date.now() - 5400000 },
+  { id: 4, action: "خطا در همگام‌سازی ابری یکی از کاربران (پاسخ 500 از سرور)", type: "ERROR", timestamp: Date.now() - 7200000 },
+  { id: 5, action: "هشدار: تاخیر بالا در پاسخگویی سرور دیتابیس (بیش از 800ms)", type: "WARNING", timestamp: Date.now() - 10800000 },
+  { id: 6, action: "موفقیت: بکاپ‌گیری خودکار اطلاعات کل کاربران انجام شد", type: "SUCCESS", timestamp: Date.now() - 14400000 },
+  { id: 7, action: "ارسال اعلان عمومی برای نگهداری دوره‌ای سرورها", type: "MESSAGE", timestamp: Date.now() - 18000000 },
+  { id: 8, action: "خطای تلاش ناموفق برای ورود به پنل ادمین با رمز عبور اشتباه", type: "ERROR", timestamp: Date.now() - 21600000 }
 ];
 
-let userEngagement = [
+let userEngagement7Days = [
   { day: "شنبه", activeUsers: 142 },
   { day: "یکشنبه", activeUsers: 198 },
   { day: "دوشنبه", activeUsers: 245 },
@@ -41,6 +46,19 @@ let userEngagement = [
   { day: "چهارشنبه", activeUsers: 289 },
   { day: "پنج‌شنبه", activeUsers: 412 },
   { day: "جمعه", activeUsers: 480 }
+];
+
+let userEngagement30Days = [
+  { day: "هفته ۱", activeUsers: 1250 },
+  { day: "هفته ۲", activeUsers: 1680 },
+  { day: "هفته ۳", activeUsers: 2100 },
+  { day: "هفته ۴", activeUsers: 2450 }
+];
+
+let userEngagement90Days = [
+  { day: "فروردین", activeUsers: 5400 },
+  { day: "اردیبهشت", activeUsers: 6850 },
+  { day: "خرداد", activeUsers: 8920 }
 ];
 
 // GET /api/config - App fetches this on startup
@@ -51,9 +69,19 @@ app.get('/api/config', (req, res) => {
 // GET /api/admin/stats - Admin dashboard statistics and audit logs
 app.get('/api/admin/stats', (req, res) => {
   res.status(200).json({
-    activityLogs: activityLogs.slice(0, 10),
-    userEngagement
+    activityLogs: activityLogs.slice(0, 25),
+    userEngagement: userEngagement7Days,
+    userEngagement30Days,
+    userEngagement90Days
   });
+});
+
+// DELETE /api/admin/logs - Admin purges audit history
+app.delete('/api/admin/logs', (req, res) => {
+  activityLogs = [
+    { id: Date.now(), action: "تاریخچه فعالیت‌ها و لاگ‌های سرور توسط مدیر پاکسازی شد", type: "WARNING", timestamp: Date.now() }
+  ];
+  res.status(200).json({ success: true, activityLogs });
 });
 
 // POST /api/admin/update-policy - Admin panel updates the app version requirements
