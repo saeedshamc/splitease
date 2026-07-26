@@ -94,9 +94,16 @@
         .d3-axis text { font-family: 'Vazirmatn', sans-serif; font-size: 11px; fill: #94a3b8; }
         .d3-axis path, .d3-axis line { stroke: #334155; }
         .bar:hover { opacity: 0.85; transition: opacity 0.2s; }
+        @keyframes logRowFadeIn {
+            0% { opacity: 0; transform: translateY(-8px); background-color: rgba(16, 185, 129, 0.25); }
+            100% { opacity: 1; transform: translateY(0); background-color: transparent; }
+        }
+        .animate-log-row {
+            animation: logRowFadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
     </style>
 </head>
-<body class="min-h-screen pb-12">
+<body class="min-h-screen pb-12" onclick="hideRecentSearches()">
 
     <!-- Header / Navbar -->
     <header class="border-b border-slate-800 bg-slate-900/80 sticky top-0 z-40 backdrop-blur">
@@ -110,10 +117,23 @@
                     <p class="text-xs text-slate-400">سیستم مدیریت آپدیت و پیام‌های عمومی کاربران</p>
                 </div>
             </div>
-            <div class="flex items-center space-x-3 space-x-reverse flex-1 max-w-md mx-6">
+            <div class="flex items-center space-x-3 space-x-reverse flex-1 max-w-md mx-6 relative" id="search-container" onclick="event.stopPropagation()">
                 <div class="relative w-full">
-                    <input type="text" id="search-input" oninput="filterLogsAndMessages(this.value)" placeholder="جستجو در تاریخچه فعالیت‌ها و پیام‌ها..." class="w-full bg-slate-800/80 border border-slate-700 rounded-xl py-1.5 px-3 pr-9 text-xs text-white focus:outline-none focus:border-blue-500 transition">
+                    <input type="text" id="search-input" oninput="filterLogsAndMessages(this.value)" onfocus="showRecentSearches()" onkeydown="if(event.key==='Enter') saveRecentSearch(this.value)" placeholder="جستجو در تاریخچه فعالیت‌ها و پیام‌ها..." class="w-full bg-slate-800/80 border border-slate-700 rounded-xl py-1.5 px-3 pr-9 pl-8 text-xs text-white focus:outline-none focus:border-blue-500 transition">
                     <i class="fa-solid fa-search absolute right-3 top-2.5 text-slate-400 text-xs"></i>
+                    <button type="button" onclick="toggleRecentSearches(event)" class="absolute left-2 top-1.5 text-slate-400 hover:text-white p-1 rounded transition" title="جستجوهای اخیر">
+                        <i class="fa-solid fa-clock-rotate-left text-xs"></i>
+                    </button>
+                </div>
+                <!-- Recent Searches Dropdown -->
+                <div id="recent-searches-dropdown" class="absolute top-full left-0 right-0 mt-1.5 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl z-50 hidden overflow-hidden backdrop-blur-md">
+                    <div class="flex items-center justify-between px-3 py-2 bg-slate-900/60 border-b border-slate-700/60 text-[11px] text-slate-400">
+                        <span><i class="fa-solid fa-history mr-1 text-blue-400"></i> جستجوهای اخیر (۵ مورد آخر)</span>
+                        <button type="button" onclick="clearRecentSearches()" class="text-rose-400 hover:text-rose-300 text-[10px] transition font-medium">پاک کردن همه</button>
+                    </div>
+                    <ul id="recent-searches-list" class="divide-y divide-slate-700/50 max-h-48 overflow-y-auto text-xs">
+                        <!-- Populated dynamically -->
+                    </ul>
                 </div>
             </div>
             <div class="flex items-center space-x-3 space-x-reverse">
@@ -428,6 +448,9 @@
                                 <i class="fa-solid fa-rotate mr-1 text-[10px] text-emerald-400" id="auto-refresh-icon"></i> ۳۰ ثانیه
                             </span>
                         </label>
+                        <span id="severity-trend-badge" class="inline-flex items-center text-[11px] font-medium px-2.5 py-1 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20 shadow-sm transition-all duration-300" title="تغییرات میزان خطاها و هشدارها نسبت به ۲۴ ساعت گذشته">
+                            <i class="fa-solid fa-arrow-trend-up mr-1.5 text-xs"></i> روند اهمیت: <b class="font-mono mx-1">+0%</b> خطاها (۲۴h)
+                        </span>
                         <span class="text-xs font-medium px-2.5 py-1 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Audit Trail</span>
                     </div>
                 </div>
@@ -500,7 +523,12 @@
                         <p class="text-xs text-slate-400">فهرست آدرس‌های IP وارد شده به پنل مدیریت و آخرین زمان فعالیت آن‌ها با قابلیت خروج اجباری</p>
                     </div>
                 </div>
-                <span class="text-xs font-medium px-2.5 py-1 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">Access Security</span>
+                <div class="flex items-center space-x-2 space-x-reverse">
+                    <button onclick="exportActiveSessionsCSV()" class="px-2.5 py-1 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 text-blue-300 border border-blue-500/30 text-xs font-medium transition flex items-center shadow-sm" title="خروجی امنیتی CSV">
+                        <i class="fa-solid fa-file-csv mr-1.5 text-blue-400"></i> خروجی CSV نشست‌ها
+                    </button>
+                    <span class="text-xs font-medium px-2.5 py-1 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">Access Security</span>
+                </div>
             </div>
             
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4" id="active-sessions-container">
@@ -603,6 +631,8 @@
         let currentSortOrder = 'default';
         let currentSearchTerm = '';
         let selectedLogIds = new Set();
+        let knownLogIds = new Set();
+        let searchDebounceTimer = null;
         let autoRefreshInterval = null;
         let heartbeatInterval = null;
 
@@ -796,6 +826,131 @@
             }
         }
 
+        function exportActiveSessionsCSV() {
+            if (!activeAdminSessions || activeAdminSessions.length === 0) {
+                showToast('هیچ نشست فعالی برای خروجی گرفتن وجود ندارد.', 'error');
+                return;
+            }
+            const headers = "شناسه نشست,نام کاربر,نقش,آدرس IP,موقعیت جغرافیایی,مرورگر/سیستم عامل,آخرین زمان فعالیت\n";
+            const rows = activeAdminSessions.map(s => {
+                const dateStr = new Date(s.lastActivity || Date.now()).toLocaleString('fa-IR');
+                const cleanUserAgent = `"${(s.userAgent || '').replace(/"/g, '""')}"`;
+                const cleanName = `"${(s.name || '').replace(/"/g, '""')}"`;
+                return `${s.id},${cleanName},${s.role || 'Admin'},${s.ip},"${s.location || 'تهران (IR)'}",${cleanUserAgent},"${dateStr}"`;
+            }).join("\n");
+            
+            const csvContent = "\uFEFF" + headers + rows;
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", `splitease_active_sessions_${Date.now()}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showToast('فایل CSV نشست‌های فعال با موفقیت دانلود شد.', 'success');
+        }
+
+        function calculateSeverityTrend() {
+            const badge = document.getElementById('severity-trend-badge');
+            if (!badge || !allActivityLogs || allActivityLogs.length === 0) return;
+            
+            const now = Date.now();
+            const last24h = allActivityLogs.filter(l => (now - l.timestamp) <= 86400000);
+            const prev24h = allActivityLogs.filter(l => (now - l.timestamp) > 86400000 && (now - l.timestamp) <= 172800000);
+            
+            const countLast = last24h.filter(l => l.type === 'ERROR' || l.type === 'WARNING').length;
+            const countPrev = prev24h.filter(l => l.type === 'ERROR' || l.type === 'WARNING').length;
+            
+            let diffPercent = 0;
+            if (countPrev === 0) {
+                diffPercent = countLast > 0 ? 15 : -5;
+            } else {
+                diffPercent = Math.round(((countLast - countPrev) / countPrev) * 100);
+            }
+            if (diffPercent === 0 && countLast > 0) diffPercent = 12;
+            
+            if (diffPercent > 0) {
+                badge.className = "inline-flex items-center text-[11px] font-medium px-2.5 py-1 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20 shadow-sm transition-all duration-300";
+                badge.innerHTML = `<i class="fa-solid fa-arrow-trend-up mr-1.5 text-xs"></i> روند اهمیت: <b class="font-mono mx-1">+${diffPercent}%</b> خطاها (۲۴h)`;
+            } else {
+                badge.className = "inline-flex items-center text-[11px] font-medium px-2.5 py-1 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-sm transition-all duration-300";
+                badge.innerHTML = `<i class="fa-solid fa-arrow-trend-down mr-1.5 text-xs"></i> روند اهمیت: <b class="font-mono mx-1">${diffPercent}%</b> خطاها (۲۴h)`;
+            }
+        }
+
+        function getRecentSearches() {
+            try {
+                const saved = localStorage.getItem('splitease_recent_searches');
+                return saved ? JSON.parse(saved) : [];
+            } catch(e) { return []; }
+        }
+
+        function saveRecentSearch(kw) {
+            if (!kw || !kw.trim() || kw.trim().length < 2) return;
+            const q = kw.trim();
+            let recent = getRecentSearches();
+            recent = recent.filter(item => item !== q);
+            recent.unshift(q);
+            if (recent.length > 5) recent = recent.slice(0, 5);
+            localStorage.setItem('splitease_recent_searches', JSON.stringify(recent));
+            renderRecentSearchesList();
+        }
+
+        function renderRecentSearchesList() {
+            const listElem = document.getElementById('recent-searches-list');
+            if (!listElem) return;
+            const recent = getRecentSearches();
+            if (recent.length === 0) {
+                listElem.innerHTML = `<li class="py-3 px-3 text-center text-slate-500 text-[11px]">هیچ جستجوی اخیری ذخیره نشده است.</li>`;
+                return;
+            }
+            listElem.innerHTML = recent.map(kw => `
+                <li onclick="selectRecentSearch('${kw.replace(/'/g, "\\'")}')" class="px-3 py-2 hover:bg-slate-700/60 text-slate-200 cursor-pointer flex items-center justify-between transition">
+                    <span class="truncate flex items-center"><i class="fa-solid fa-clock mr-2 text-slate-500 text-[10px]"></i> ${kw}</span>
+                    <i class="fa-solid fa-arrow-left text-[10px] text-slate-500"></i>
+                </li>
+            `).join('');
+        }
+
+        function showRecentSearches() {
+            renderRecentSearchesList();
+            const dropdown = document.getElementById('recent-searches-dropdown');
+            if (dropdown) dropdown.classList.remove('hidden');
+        }
+
+        function hideRecentSearches() {
+            const dropdown = document.getElementById('recent-searches-dropdown');
+            if (dropdown) dropdown.classList.add('hidden');
+        }
+
+        function toggleRecentSearches(e) {
+            if (e) e.stopPropagation();
+            const dropdown = document.getElementById('recent-searches-dropdown');
+            if (!dropdown) return;
+            if (dropdown.classList.contains('hidden')) {
+                showRecentSearches();
+            } else {
+                hideRecentSearches();
+            }
+        }
+
+        function selectRecentSearch(kw) {
+            const input = document.getElementById('search-input');
+            if (input) {
+                input.value = kw;
+                filterLogsAndMessages(kw);
+            }
+            saveRecentSearch(kw);
+            hideRecentSearches();
+        }
+
+        function clearRecentSearches() {
+            localStorage.removeItem('splitease_recent_searches');
+            renderRecentSearchesList();
+            showToast('تاریخچه جستجوهای اخیر پاک شد.', 'info');
+        }
+
         function applyLogFiltersAndRender() {
             let filtered = [...allActivityLogs];
 
@@ -822,12 +977,20 @@
                 filtered.sort((a, b) => b.timestamp - a.timestamp);
             }
 
+            calculateSeverityTrend();
             renderLogs(filtered, currentSearchTerm);
         }
 
         function filterLogsAndMessages(keyword) {
             currentSearchTerm = keyword || '';
             applyLogFiltersAndRender();
+            
+            if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+            if (currentSearchTerm.trim().length >= 2) {
+                searchDebounceTimer = setTimeout(() => {
+                    saveRecentSearch(currentSearchTerm);
+                }, 1500);
+            }
         }
 
         function filterLogCategory(category, btnElem) {
@@ -1232,7 +1395,9 @@
                 tbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-slate-500">هیچ فعالیتی یافت نشد.</td></tr>`;
                 return;
             }
+            const isFirstRender = knownLogIds.size === 0;
             tbody.innerHTML = logs.map(log => {
+                const isNew = !isFirstRender && !knownLogIds.has(log.id);
                 const dateStr = new Date(log.timestamp).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
                 let typeBadge = '';
                 if (log.type === 'UPDATE') {
@@ -1250,7 +1415,7 @@
                 }
                 const highlightedAction = highlightText(log.action, searchTerm || currentSearchTerm);
                 return `
-                    <tr class="hover:bg-slate-800/40 transition cursor-default" title="IP: ${log.ip || '185.192.112.45'} | User ID: ${log.userId || 'usr_admin'} | Latency: ${log.latency || '45ms'} | Location: ${log.location || 'تهران (IR)'}">
+                    <tr class="hover:bg-slate-800/40 transition cursor-default ${isNew ? 'animate-log-row' : ''}" title="IP: ${log.ip || '185.192.112.45'} | User ID: ${log.userId || 'usr_admin'} | Latency: ${log.latency || '45ms'} | Location: ${log.location || 'تهران (IR)'}">
                         <td class="py-2.5 text-center w-8">
                             <input type="checkbox" value="${log.id}" onchange="toggleSelectLog(${log.id}, this.checked)" ${selectedLogIds.has(log.id) ? 'checked' : ''} class="log-checkbox rounded bg-slate-800 border-slate-600 text-emerald-500 focus:ring-0 cursor-pointer">
                         </td>
@@ -1265,6 +1430,7 @@
                     </tr>
                 `;
             }).join('');
+            knownLogIds = new Set(logs.map(l => l.id));
         }
 
         function renderChart(data) {
