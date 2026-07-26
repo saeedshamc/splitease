@@ -1028,20 +1028,45 @@
 
     <!-- Log Details Modal / Popover -->
     <div id="log-details-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm hidden opacity-0 transition-opacity duration-300">
-        <div class="glass-panel bg-slate-900 border border-slate-700 rounded-2xl p-6 max-w-lg w-full mx-4 shadow-2xl transform scale-95 transition-transform duration-300">
+        <div id="log-details-panel" class="glass-panel bg-slate-900 border-2 border-slate-700 rounded-2xl p-6 max-w-lg w-full mx-4 shadow-2xl transform scale-95 transition-transform duration-300">
             <div class="flex items-center justify-between border-b border-slate-700/80 pb-4 mb-4">
                 <div class="flex items-center space-x-3 space-x-reverse">
-                    <div class="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 text-lg">
-                        <i class="fa-solid fa-circle-info"></i>
+                    <div id="log-detail-icon-box" class="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 text-lg shadow">
+                        <i id="log-detail-icon" class="fa-solid fa-circle-info"></i>
                     </div>
                     <div>
-                        <h3 class="text-base font-bold text-white">جزئیات فنی رویداد سرور</h3>
+                        <div class="flex items-center space-x-2 space-x-reverse mb-0.5">
+                            <h3 class="text-base font-bold text-white">جزئیات فنی رویداد سرور</h3>
+                            <span id="log-detail-severity-badge" class="hidden px-2 py-0.5 rounded-full text-[10px] font-bold font-mono"></span>
+                        </div>
                         <p class="text-xs text-slate-400" id="detail-log-id">شناسه رویداد: #0000</p>
                     </div>
                 </div>
-                <button onclick="closeLogDetailsModal()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
+                <div class="flex items-center space-x-2 space-x-reverse relative">
+                    <button onclick="toggleShareMenu(event)" id="btn-share-log" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-blue-400 flex items-center justify-center transition shadow-sm border border-slate-700/60" title="اشتراک‌گذاری گزارش (Share)">
+                        <i class="fa-solid fa-share-nodes"></i>
+                    </button>
+                    <!-- Share Options Dropdown -->
+                    <div id="share-options-menu" onclick="event.stopPropagation()" class="absolute left-0 top-full mt-2 w-56 bg-slate-800 border border-slate-600 rounded-xl shadow-2xl z-50 hidden overflow-hidden backdrop-blur-md">
+                        <div class="px-3 py-2 bg-slate-900/90 border-b border-slate-700 text-[11px] font-bold text-slate-300 flex items-center justify-between">
+                            <span><i class="fa-solid fa-share-from-square text-blue-400 mr-1.5"></i> اشتراک‌گذاری رویداد</span>
+                            <span class="text-[9px] bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded font-mono">#<span id="share-log-id-span">0000</span></span>
+                        </div>
+                        <ul class="divide-y divide-slate-700/60 text-xs">
+                            <li onclick="shareViaLink()" class="px-3 py-2.5 hover:bg-slate-700/80 cursor-pointer flex items-center space-x-2 space-x-reverse text-slate-200 transition">
+                                <i class="fa-solid fa-link text-emerald-400 text-xs"></i>
+                                <span>کپی لینک اشتراک‌گذاری (Copy Link)</span>
+                            </li>
+                            <li onclick="shareViaEmail()" class="px-3 py-2.5 hover:bg-slate-700/80 cursor-pointer flex items-center space-x-2 space-x-reverse text-slate-200 transition">
+                                <i class="fa-solid fa-envelope text-amber-400 text-xs"></i>
+                                <span>ارسال گزارش با ایمیل (Email Report)</span>
+                            </li>
+                        </ul>
+                    </div>
+                    <button onclick="closeLogDetailsModal()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition border border-slate-700/60" title="بستن پنجره">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
             </div>
             
             <div class="space-y-3 text-xs mb-6">
@@ -1074,9 +1099,14 @@
                 <div id="detail-stack-container" class="hidden bg-rose-500/10 p-3 rounded-xl border border-rose-500/30 flex flex-col gap-2">
                     <div class="flex items-center justify-between">
                         <span class="text-rose-400 font-bold flex items-center"><i class="fa-solid fa-bug mr-1.5"></i> رهگیری خطا و استک تریس (Stack Trace):</span>
-                        <button onclick="toggleStackTraceView()" id="btn-toggle-stack" class="px-2.5 py-1 rounded bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-[11px] font-mono font-bold transition flex items-center">
-                            <i class="fa-solid fa-code ml-1 text-xs"></i> <span id="label-toggle-stack">نمایش استک تریس (View Stack Trace)</span>
-                        </button>
+                        <div class="flex items-center space-x-2 space-x-reverse">
+                            <button onclick="copyStackTraceToClipboard()" id="btn-copy-stack" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 text-[11px] font-mono font-bold transition flex items-center shadow-sm" title="کپی استک تریس در کلیپ‌بورد">
+                                <i class="fa-solid fa-copy ml-1 text-xs text-amber-400"></i> <span id="label-copy-stack">کپی (Copy)</span>
+                            </button>
+                            <button onclick="toggleStackTraceView()" id="btn-toggle-stack" class="px-2.5 py-1 rounded bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-[11px] font-mono font-bold transition flex items-center shadow-sm">
+                                <i class="fa-solid fa-code ml-1 text-xs"></i> <span id="label-toggle-stack">نمایش استک تریس (View Stack Trace)</span>
+                            </button>
+                        </div>
                     </div>
                     <pre id="stack-trace-content" class="hidden bg-slate-950/95 p-3 rounded-xl border border-rose-500/40 font-mono text-[11px] text-rose-300 leading-relaxed overflow-x-auto max-h-48 overflow-y-auto select-all shadow-inner mt-1 text-left" dir="ltr"></pre>
                 </div>
@@ -1310,11 +1340,14 @@
                 }
             });
             
-            // Hide search dropdowns on outside click
+            // Hide search dropdowns and share menu on outside click
             document.addEventListener('click', (e) => {
                 if (!e.target.closest('#search-container')) {
                     hideQuerySuggestions();
                     hideRecentSearches();
+                }
+                if (!e.target.closest('#share-options-menu') && !e.target.closest('#btn-share-log')) {
+                    if (typeof hideShareMenu === 'function') hideShareMenu();
                 }
             });
         });
@@ -2033,9 +2066,12 @@
             applyLogFiltersAndRender();
         }
 
+        let currentViewedLog = null;
+
         function showLogDetails(id) {
             const log = allActivityLogs.find(l => l.id === id);
             if (!log) return;
+            currentViewedLog = log;
             document.getElementById('detail-log-id').textContent = `شناسه رویداد: #${log.id.toString().slice(-4)}`;
             document.getElementById('detail-log-action').textContent = log.action || '-';
             document.getElementById('detail-log-userid').textContent = log.userId || 'usr_admin';
@@ -2045,10 +2081,66 @@
             document.getElementById('detail-log-useragent').textContent = log.userAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)';
             document.getElementById('detail-log-useragent').title = log.userAgent || '';
 
+            const spanId = document.getElementById('share-log-id-span');
+            if (spanId) spanId.textContent = log.id.toString().slice(-4);
+            hideShareMenu();
+
+            // Handle Severity Visual Indicator (colored border and badge)
+            const panel = document.getElementById('log-details-panel');
+            const iconBox = document.getElementById('log-detail-icon-box');
+            const iconEl = document.getElementById('log-detail-icon');
+            const badge = document.getElementById('log-detail-severity-badge');
+
+            if (panel && iconBox && iconEl && badge) {
+                // Reset styling classes
+                panel.className = 'glass-panel bg-slate-900 rounded-2xl p-6 max-w-lg w-full mx-4 shadow-2xl transform scale-95 transition-transform duration-300 border-2';
+                badge.classList.remove('hidden');
+                
+                if (log.type === 'ERROR') {
+                    panel.classList.add('border-rose-500/80', 'shadow-rose-500/20');
+                    iconBox.className = 'w-10 h-10 rounded-xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-400 text-lg shadow-md';
+                    iconEl.className = 'fa-solid fa-circle-exclamation animate-pulse';
+                    badge.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-bold font-mono bg-rose-500/20 text-rose-300 border border-rose-500/40 flex items-center shadow-sm';
+                    badge.innerHTML = `<i class="fa-solid fa-bug mr-1"></i> ${currentLang === 'en' ? 'ERROR / Critical' : 'خطای بحرانی (ERROR)'}`;
+                } else if (log.type === 'WARNING') {
+                    panel.classList.add('border-amber-500/80', 'shadow-amber-500/20');
+                    iconBox.className = 'w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 text-lg shadow-md';
+                    iconEl.className = 'fa-solid fa-triangle-exclamation';
+                    badge.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-bold font-mono bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center shadow-sm';
+                    badge.innerHTML = `<i class="fa-solid fa-triangle-exclamation mr-1"></i> ${currentLang === 'en' ? 'WARNING / Alert' : 'هشدار سیستم (WARNING)'}`;
+                } else if (log.type === 'SUCCESS') {
+                    panel.classList.add('border-emerald-500/80', 'shadow-emerald-500/20');
+                    iconBox.className = 'w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 text-lg shadow-md';
+                    iconEl.className = 'fa-solid fa-check-circle';
+                    badge.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-bold font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center shadow-sm';
+                    badge.innerHTML = `<i class="fa-solid fa-check mr-1"></i> ${currentLang === 'en' ? 'SUCCESS / OK' : 'عملیات موفق (SUCCESS)'}`;
+                } else if (log.type === 'UPDATE') {
+                    panel.classList.add('border-blue-500/80', 'shadow-blue-500/20');
+                    iconBox.className = 'w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-400 text-lg shadow-md';
+                    iconEl.className = 'fa-solid fa-cloud-arrow-up';
+                    badge.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-bold font-mono bg-blue-500/20 text-blue-300 border border-blue-500/40 flex items-center shadow-sm';
+                    badge.innerHTML = `<i class="fa-solid fa-cloud-arrow-up mr-1"></i> ${currentLang === 'en' ? 'UPDATE' : 'بروزرسانی (UPDATE)'}`;
+                } else if (log.type === 'MESSAGE') {
+                    panel.classList.add('border-amber-500/80', 'shadow-amber-500/20');
+                    iconBox.className = 'w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 text-lg shadow-md';
+                    iconEl.className = 'fa-solid fa-bullhorn';
+                    badge.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-bold font-mono bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center shadow-sm';
+                    badge.innerHTML = `<i class="fa-solid fa-bullhorn mr-1"></i> ${currentLang === 'en' ? 'MESSAGE' : 'پیام سیستم (MESSAGE)'}`;
+                } else {
+                    panel.classList.add('border-purple-500/80', 'shadow-purple-500/20');
+                    iconBox.className = 'w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-400 text-lg shadow-md';
+                    iconEl.className = 'fa-solid fa-server';
+                    badge.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-bold font-mono bg-purple-500/20 text-purple-300 border border-purple-500/40 flex items-center shadow-sm';
+                    badge.innerHTML = `<i class="fa-solid fa-server mr-1"></i> ${currentLang === 'en' ? 'SYSTEM / Info' : 'رویداد سیستمی (SYSTEM)'}`;
+                }
+            }
+
             // Handle Stack Trace Section
             const stackContainer = document.getElementById('detail-stack-container');
             const stackContent = document.getElementById('stack-trace-content');
             const btnLabel = document.getElementById('label-toggle-stack');
+            const copyLabel = document.getElementById('label-copy-stack');
+            if (copyLabel) copyLabel.textContent = currentLang === 'en' ? 'Copy Data' : 'کپی (Copy)';
             if (stackContainer && stackContent) {
                 if (log.type === 'ERROR' || log.type === 'WARNING' || log.stackTrace) {
                     stackContainer.classList.remove('hidden');
@@ -2069,11 +2161,91 @@
         }
 
         function closeLogDetailsModal() {
+            hideShareMenu();
             const modal = document.getElementById('log-details-modal');
             if (modal) {
                 modal.classList.add('opacity-0');
                 setTimeout(() => modal.classList.add('hidden'), 300);
             }
+        }
+
+        function toggleShareMenu(event) {
+            if (event) event.stopPropagation();
+            const menu = document.getElementById('share-options-menu');
+            if (!menu) return;
+            menu.classList.toggle('hidden');
+        }
+
+        function hideShareMenu() {
+            const menu = document.getElementById('share-options-menu');
+            if (menu) menu.classList.add('hidden');
+        }
+
+        function shareViaLink() {
+            if (!currentViewedLog) return;
+            hideShareMenu();
+            const url = window.location.origin + '/?eventId=' + currentViewedLog.id + '&type=' + encodeURIComponent(currentViewedLog.type || 'ERROR');
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(url).then(() => {
+                    showToast(currentLang === 'en' ? 'Shareable link copied to clipboard!' : '🔗 لینک اشتراک‌گذاری رویداد در کلیپ‌بورد کپی شد.', 'success');
+                }).catch(() => {
+                    showToast('خطا در کپی لینک', 'error');
+                });
+            } else {
+                showToast(currentLang === 'en' ? 'Shareable link generated: ' + url : 'لینک تولید شد: ' + url, 'info');
+            }
+        }
+
+        function shareViaEmail() {
+            if (!currentViewedLog) return;
+            hideShareMenu();
+            const subject = encodeURIComponent(`[${currentViewedLog.type || 'LOG'}] Server Event Report #${currentViewedLog.id}`);
+            const body = encodeURIComponent(
+                `Server Event Log Details:\n\n` +
+                `Event ID: #${currentViewedLog.id}\n` +
+                `Timestamp: ${new Date(currentViewedLog.timestamp || Date.now()).toLocaleString()}\n` +
+                `Type/Severity: ${currentViewedLog.type || 'SYSTEM'}\n` +
+                `Action: ${currentViewedLog.action || '-'}\n` +
+                `User ID: ${currentViewedLog.userId || 'usr_admin'}\n` +
+                `IP Address: ${currentViewedLog.ip || '-'}\n` +
+                `Location: ${currentViewedLog.location || '-'}\n` +
+                `Latency: ${currentViewedLog.latency || '-'}\n` +
+                `User Agent: ${currentViewedLog.userAgent || '-'}\n\n` +
+                `Stack Trace / Debug Info:\n` +
+                `${currentViewedLog.stackTrace || '-'}\n\n` +
+                `Generated from SplitEase Admin Operations Dashboard.`
+            );
+            window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
+            showToast(currentLang === 'en' ? 'Opening email client for log report...' : '📧 کلاینت ایمیل برای ارسال گزارش رویداد باز شد.', 'info');
+        }
+
+        function copyStackTraceToClipboard() {
+            const content = document.getElementById('stack-trace-content');
+            if (!content || !content.textContent) return;
+            const textToCopy = content.textContent;
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(textToCopy).then(() => {
+                    showToast(currentLang === 'en' ? 'Debug stack trace copied to clipboard!' : '📋 داده‌های استک تریس در کلیپ‌بورد کپی شد.', 'success');
+                }).catch(() => {
+                    fallbackCopyText(textToCopy);
+                });
+            } else {
+                fallbackCopyText(textToCopy);
+            }
+        }
+
+        function fallbackCopyText(text) {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                showToast(currentLang === 'en' ? 'Debug stack trace copied to clipboard!' : '📋 داده‌های استک تریس در کلیپ‌بورد کپی شد.', 'success');
+            } catch (e) {
+                showToast('خطا در کپی داده‌ها', 'error');
+            }
+            document.body.removeChild(textarea);
         }
 
         function openClearLogsModal() {
