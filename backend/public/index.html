@@ -120,11 +120,15 @@
                 <button onclick="toggleTheme()" id="theme-toggle-btn" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition" title="تغییر تم (تاریک/روشن)">
                     <i id="theme-icon" class="fa-solid fa-sun text-sm text-amber-400"></i>
                 </button>
-                <span id="connection-status" class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                <button onclick="downloadConfigSnapshot()" class="p-2 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 transition flex items-center space-x-1.5 space-x-reverse" title="دانلود بکاپ کامل تنظیمات (JSON Snapshot)">
+                    <i class="fa-solid fa-file-arrow-down text-sm"></i>
+                    <span class="text-xs font-medium hidden sm:inline">بکاپ JSON</span>
+                </button>
+                <span id="connection-status" class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 transition-all duration-300">
                     <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse ml-2"></span>
                     متصل به سرور Vercel
                 </span>
-                <button onclick="fetchConfig(); fetchStats();" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition" title="بارگذاری مجدد اطلاعات">
+                <button onclick="fetchConfig(); fetchStats(); checkServerHeartbeat();" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition" title="بارگذاری مجدد اطلاعات">
                     <i class="fa-solid fa-rotate text-sm"></i>
                 </button>
             </div>
@@ -379,7 +383,10 @@
                             <p class="text-xs text-slate-400">آمار روزانه کاربران فعال و نرخ درگیری با اپلیکیشن</p>
                         </div>
                     </div>
-                    <span class="text-xs font-medium px-2.5 py-1 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20">Analytics</span>
+                    <div class="flex items-center space-x-2 space-x-reverse">
+                        <span class="inline-flex items-center text-[11px] text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-lg font-medium shadow-sm"><i class="fa-solid fa-chart-line mr-1.5 text-xs"></i> خط روند: میانگین متحرک (MA)</span>
+                        <span class="text-xs font-medium px-2.5 py-1 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20">Analytics</span>
+                    </div>
                 </div>
                 <!-- Date Range Selector -->
                 <div class="flex flex-wrap items-center justify-between gap-2 mb-4 bg-slate-800/40 p-2.5 rounded-xl border border-slate-700/60">
@@ -479,6 +486,27 @@
                 </div>
             </div>
         </div>
+
+        <!-- Section 5: Active Admin Sessions -->
+        <div class="mt-8 glass-panel rounded-2xl p-6 shadow-xl relative overflow-hidden">
+            <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-500"></div>
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center space-x-3 space-x-reverse">
+                    <div class="w-10 h-10 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+                        <i class="fa-solid fa-users-viewfinder text-lg"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-base font-bold text-white">نشست‌های فعال مدیران (Active Sessions)</h2>
+                        <p class="text-xs text-slate-400">فهرست آدرس‌های IP وارد شده به پنل مدیریت و آخرین زمان فعالیت آن‌ها با قابلیت خروج اجباری</p>
+                    </div>
+                </div>
+                <span class="text-xs font-medium px-2.5 py-1 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">Access Security</span>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4" id="active-sessions-container">
+                <div class="col-span-3 text-center py-6 text-slate-500 text-xs">در حال بارگذاری اطلاعات نشست‌های فعال...</div>
+            </div>
+        </div>
     </main>
 
     <!-- Confirmation Modal for Clear All Logs -->
@@ -570,11 +598,13 @@
         let currentUserEngagement = [];
         let userEngagement30Days = [];
         let userEngagement90Days = [];
+        let activeAdminSessions = [];
         let currentLogCategory = 'ALL';
         let currentSortOrder = 'default';
         let currentSearchTerm = '';
         let selectedLogIds = new Set();
         let autoRefreshInterval = null;
+        let heartbeatInterval = null;
 
         const severityMap = {
             'ERROR': 6,
@@ -594,7 +624,142 @@
             }
             fetchConfig();
             fetchStats();
+            checkServerHeartbeat();
+            if (heartbeatInterval) clearInterval(heartbeatInterval);
+            heartbeatInterval = setInterval(checkServerHeartbeat, 10000);
         });
+
+        async function checkServerHeartbeat() {
+            const statusElem = document.getElementById('connection-status');
+            if (!statusElem) return;
+            const startTime = Date.now();
+            try {
+                const res = await fetch('/api/admin/heartbeat');
+                if (res.ok) {
+                    const latency = Date.now() - startTime;
+                    if (latency > 500) {
+                        statusElem.className = "inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20 transition-all duration-300";
+                        statusElem.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-400 ml-2"></span> تاخیر بالا (${latency}ms)`;
+                    } else {
+                        statusElem.className = "inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 transition-all duration-300";
+                        statusElem.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse ml-2"></span> متصل به سرور (${latency}ms)`;
+                    }
+                } else {
+                    throw new Error('Heartbeat status not ok');
+                }
+            } catch (err) {
+                statusElem.className = "inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-rose-500/10 text-rose-400 border border-rose-500/20 transition-all duration-300";
+                statusElem.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-400 ml-2"></span> قطع ارتباط (Offline)`;
+            }
+        }
+
+        async function downloadConfigSnapshot() {
+            try {
+                const res = await fetch('/api/config');
+                if (res.ok) {
+                    const configData = await res.json();
+                    const snapshot = {
+                        exportDate: new Date().toISOString(),
+                        exportTimestamp: Date.now(),
+                        environment: "SplitEase Production Cloud",
+                        configuration: configData
+                    };
+                    const jsonStr = JSON.stringify(snapshot, null, 2);
+                    const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8;' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `splitease_config_snapshot_${Date.now()}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    showToast('اسنپ‌شات کامل تنظیمات اپلیکیشن ذخیره شد.', 'success');
+                } else {
+                    showToast('خطا در دریافت اطلاعات تنظیمات.', 'error');
+                }
+            } catch (err) {
+                showToast('خطا در ارتباط با سرور برای دانلود بکاپ.', 'error');
+            }
+        }
+
+        function formatRelativeTime(ts) {
+            if (!ts) return 'نامشخص';
+            const diffSec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+            if (diffSec < 15) return 'همین الان (آنلاین)';
+            if (diffSec < 60) return `${diffSec} ثانیه پیش`;
+            const diffMin = Math.floor(diffSec / 60);
+            if (diffMin < 60) return `${diffMin} دقیقه پیش`;
+            const diffHr = Math.floor(diffMin / 60);
+            return `${diffHr} ساعت پیش`;
+        }
+
+        function renderActiveSessions(sessions) {
+            const container = document.getElementById('active-sessions-container');
+            if (!container) return;
+            if (!sessions || sessions.length === 0) {
+                container.innerHTML = `<div class="col-span-3 text-center py-6 text-slate-500 text-xs">هیچ نشست فعالی یافت نشد.</div>`;
+                return;
+            }
+            container.innerHTML = sessions.map(s => `
+                <div class="bg-slate-800/70 border border-slate-700/80 rounded-xl p-4 flex flex-col justify-between hover:border-blue-500/40 transition shadow-lg">
+                    <div>
+                        <div class="flex items-center justify-between mb-2.5">
+                            <span class="text-white font-bold text-sm truncate flex items-center">
+                                <i class="fa-solid fa-user-shield text-blue-400 ml-2"></i> ${s.name}
+                            </span>
+                            ${s.isCurrent ? `<span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-semibold shrink-0">نشست شما</span>` : `<span class="px-2 py-0.5 rounded bg-slate-700 text-slate-300 text-[10px] shrink-0">${s.role || 'Admin'}</span>`}
+                        </div>
+                        <div class="space-y-1.5 text-xs">
+                            <div class="text-slate-300 font-mono flex items-center bg-slate-900/60 px-2 py-1 rounded border border-slate-700/50">
+                                <i class="fa-solid fa-network-wired text-blue-400 mr-2"></i> آدرس IP: <b class="mr-auto text-blue-300 font-bold" dir="ltr">${s.ip}</b>
+                            </div>
+                            <div class="text-[11px] text-slate-400 flex items-center truncate" title="${s.userAgent}">
+                                <i class="fa-solid fa-laptop text-purple-400 mr-2 shrink-0"></i> <span class="truncate">${s.userAgent}</span>
+                            </div>
+                            <div class="text-[11px] text-slate-400 flex items-center">
+                                <i class="fa-solid fa-location-dot text-rose-400 mr-2"></i> موقعیت: <span class="font-medium text-slate-300">${s.location || 'تهران (IR)'}</span>
+                            </div>
+                            <div class="text-[11px] text-emerald-400 flex items-center font-mono">
+                                <i class="fa-solid fa-clock text-amber-400 mr-2"></i> آخرین فعالیت: <span class="font-bold">${formatRelativeTime(s.lastActivity)}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-3 pt-3 border-t border-slate-700/60">
+                        ${s.isCurrent ? `
+                            <button disabled class="w-full py-2 rounded-lg bg-slate-700/40 text-slate-500 text-xs cursor-not-allowed font-medium border border-slate-700/40">
+                                <i class="fa-solid fa-lock ml-1.5"></i> نشست فعال شما (غیرقابل خروج)
+                            </button>
+                        ` : `
+                            <button onclick="forceLogoutSession('${s.id}', '${s.name}')" class="w-full py-2 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 text-xs font-bold transition flex items-center justify-center shadow-sm hover:shadow">
+                                <i class="fa-solid fa-right-from-bracket ml-1.5"></i> خروج اجباری (Force Logout)
+                            </button>
+                        `}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function forceLogoutSession(id, name) {
+            if (!confirm(`آیا از خروج اجباری نشست «${name}» اطمینان دارید؟ ارتباط این کاربر با پنل قطع خواهد شد.`)) return;
+            try {
+                const res = await fetch('/api/admin/sessions/logout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id })
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    activeAdminSessions = data.activeSessions || [];
+                    allActivityLogs = data.activityLogs || allActivityLogs;
+                    renderActiveSessions(activeAdminSessions);
+                    applyLogFiltersAndRender();
+                    showToast(`نشست «${name}» با موفقیت از سیستم خارج شد.`, 'success');
+                }
+            } catch (err) {
+                showToast('خطا در ارتباط با سرور برای خروج کاربر.', 'error');
+            }
+        }
 
         function toggleTheme() {
             const isLight = document.body.classList.toggle('light-theme');
@@ -617,7 +782,9 @@
                     currentUserEngagement = data.userEngagement || [];
                     userEngagement30Days = data.userEngagement30Days || [];
                     userEngagement90Days = data.userEngagement90Days || [];
+                    activeAdminSessions = data.activeSessions || [];
                     applyLogFiltersAndRender();
+                    renderActiveSessions(activeAdminSessions);
                     if (!isSilent) {
                         renderChart(currentUserEngagement);
                     } else {
@@ -1208,6 +1375,68 @@
                 .style("font-weight", "bold")
                 .style("font-family", "Vazirmatn")
                 .text(d => d.activeUsers);
+
+            // Calculate Moving Average for Growth Velocity
+            const maData = data.map((d, i) => {
+                let sum = 0;
+                let count = 0;
+                for (let j = Math.max(0, i - 1); j <= Math.min(data.length - 1, i + 1); j++) {
+                    sum += data[j].activeUsers;
+                    count++;
+                }
+                return {
+                    day: d.day,
+                    ma: Math.round(sum / count)
+                };
+            });
+
+            // Draw Trendline Path
+            const line = d3.line()
+                .x(d => x(d.day) + x.bandwidth() / 2)
+                .y(d => y(d.ma))
+                .curve(d3.curveMonotoneX);
+
+            svg.append("path")
+                .datum(maData)
+                .attr("fill", "none")
+                .attr("stroke", "#f59e0b")
+                .attr("stroke-width", 2.5)
+                .attr("stroke-dasharray", "4,3")
+                .style("filter", "drop-shadow(0px 2px 4px rgba(245, 158, 11, 0.4))")
+                .attr("d", line);
+
+            // Draw Trendline Dots
+            svg.selectAll(".ma-dot")
+                .data(maData)
+                .enter()
+                .append("circle")
+                .attr("class", "ma-dot cursor-pointer")
+                .attr("cx", d => x(d.day) + x.bandwidth() / 2)
+                .attr("cy", d => y(d.ma))
+                .attr("r", 4)
+                .attr("fill", "#f59e0b")
+                .attr("stroke", "#1e293b")
+                .attr("stroke-width", 2)
+                .on("mouseover", function(event, d) {
+                    d3.select(this).attr("r", 6.5).style("filter", "brightness(1.3)");
+                    const tip = document.getElementById('d3-chart-tooltip');
+                    if (tip) {
+                        tip.innerHTML = `<div class="font-bold text-amber-300 mb-0.5">${d.day}</div><div class="flex items-center space-x-1 space-x-reverse"><span class="text-slate-300">میانگین متحرک رشد (MA):</span> <span class="font-mono font-bold text-amber-400 text-sm">${d.ma}</span> <span class="text-[10px] text-slate-400">نفر</span></div>`;
+                        tip.classList.remove('hidden');
+                    }
+                })
+                .on("mousemove", function(event) {
+                    const tip = document.getElementById('d3-chart-tooltip');
+                    if (tip) {
+                        tip.style.left = (event.clientX - tip.offsetWidth / 2) + "px";
+                        tip.style.top = (event.clientY - tip.offsetHeight - 15) + "px";
+                    }
+                })
+                .on("mouseleave", function(event) {
+                    d3.select(this).attr("r", 4).style("filter", "none");
+                    const tip = document.getElementById('d3-chart-tooltip');
+                    if (tip) tip.classList.add('hidden');
+                });
         }
 
         function setPreviewTab(tab) {

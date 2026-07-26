@@ -61,19 +61,58 @@ let userEngagement90Days = [
   { day: "خرداد", activeUsers: 8920 }
 ];
 
+let activeSessions = [
+  { id: "sess_1", ip: "185.192.112.45", name: "مدیر کل (شما)", role: "Super Admin", userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/126.0", lastActivity: Date.now() - 45000, location: "تهران (IR)", isCurrent: true },
+  { id: "sess_2", ip: "91.240.118.89", name: "پشتیبان سیستم (پریسا)", role: "Support Admin", userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari/605.1", lastActivity: Date.now() - 1800000, location: "شیراز (IR)", isCurrent: false },
+  { id: "sess_3", ip: "10.0.0.42", name: "ناظر فنی سیستم (علیرضا)", role: "DevOps Engineer", userAgent: "Mozilla/5.0 (Linux; Android 14) Chrome/125.0 Mobile", lastActivity: Date.now() - 7200000, location: "اصفهان (IR)", isCurrent: false }
+];
+
 // GET /api/config - App fetches this on startup
 app.get('/api/config', (req, res) => {
   res.status(200).json(appConfigState);
 });
 
+// GET /api/admin/heartbeat - Server liveness monitor endpoint
+app.get('/api/admin/heartbeat', (req, res) => {
+  const currentSess = activeSessions.find(s => s.isCurrent);
+  if (currentSess) currentSess.lastActivity = Date.now();
+  res.status(200).json({ status: "ok", serverTime: Date.now(), uptime: process.uptime() });
+});
+
 // GET /api/admin/stats - Admin dashboard statistics and audit logs
 app.get('/api/admin/stats', (req, res) => {
+  const currentSess = activeSessions.find(s => s.isCurrent);
+  if (currentSess) currentSess.lastActivity = Date.now();
+
   res.status(200).json({
     activityLogs: activityLogs.slice(0, 25),
     userEngagement: userEngagement7Days,
     userEngagement30Days,
-    userEngagement90Days
+    userEngagement90Days,
+    activeSessions
   });
+});
+
+// POST /api/admin/sessions/logout - Force logout specific session
+app.post('/api/admin/sessions/logout', (req, res) => {
+  const { id } = req.body;
+  const session = activeSessions.find(s => s.id === id);
+  if (session && !session.isCurrent) {
+    activeSessions = activeSessions.filter(s => s.id !== id);
+    activityLogs.unshift({
+      id: Date.now(),
+      action: `خروج اجباری (Force Logout) برای نشست کاربری ${session.name} (IP: ${session.ip})`,
+      type: "WARNING",
+      timestamp: Date.now(),
+      ip: req.ip || "185.192.112.45",
+      userId: "usr_admin",
+      userAgent: req.get('User-Agent') || "Admin Dashboard Web",
+      latency: "15ms",
+      location: "تهران (IR)"
+    });
+    if (activityLogs.length > 20) activityLogs.pop();
+  }
+  res.status(200).json({ success: true, activeSessions, activityLogs });
 });
 
 // DELETE /api/admin/logs - Admin purges audit history
